@@ -1,98 +1,107 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import re
 
 # --- 1. APP CONFIGURATION ---
 st.set_page_config(page_title="BDL.AI - Master Brain", page_icon="🧠")
 
-st.title("🧠 BDL.AI - Master Brain")
-st.markdown("---")
+# --- 2. PASSWORD PROTECTION ---
+# This looks for the password you set in Streamlit Secrets
+def check_password():
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
 
-# --- 2. CLOUD CONNECTION ---
-# This looks for your 'Digital Key' in the Streamlit Secrets box
+    if st.session_state.password_correct:
+        return True
+
+    st.title("🔐 BDL.AI - Encrypted Session")
+    password_input = st.text_input("Enter Brain Access Code:", type="password")
+    
+    # This pulls 'password' from your [access_settings] in Secrets
+    if password_input == st.secrets["access_settings"]["password"]:
+        st.session_state.password_correct = True
+        st.rerun()
+    elif password_input:
+        st.error("❌ Access Denied: Incorrect Password")
+    return False
+
+if not check_password():
+    st.stop()
+
+# --- 3. CLOUD CONNECTION & LOAD ---
+st.title("🧠 BDL.AI - Master Brain")
+st.write("● ENCRYPTED CLOUD SESSION ACTIVE")
+
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error("Connection Error: Check your Streamlit Secrets.")
-    st.stop()
-
-# --- 3. LOAD MEMORY ---
-# 'ttl=0' means it always checks the cloud for new answers immediately
-try:
     kb = conn.read(ttl="0s")
 except Exception as e:
-    st.error(f"Memory Error: I can't read the Google Sheet. {e}")
+    st.error(f"⚠️ Brain Connection Error: {e}")
     st.stop()
 
-# --- 4. CHAT INTERFACE ---
+# --- 4. MATH ENGINE ---
+def solve_math(text):
+    # This looks for numbers and symbols like +, -, *, /
+    clean_text = text.replace("x", "*").replace("÷", "/")
+    equation = re.findall(r'[0-9+\-*/(). ]+', clean_text)
+    if equation:
+        try:
+            result = eval(equation[0])
+            return f"The answer is {result}"
+        except:
+            return None
+    return None
+
+# --- 5. CHAT LOGIC ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User Input
 prompt = st.chat_input("Write to BDL here...")
 
 if prompt:
-    # 1. Show the user's message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. TEACH COMMAND LOGIC
-    # If the user starts a sentence with 'teach '
+    # A. TEACH COMMAND
     if prompt.lower().startswith("teach "):
         parts = prompt.split(" ", 2)
-        
         if len(parts) == 3:
-            question_word = parts[1].lower().strip()
-            answer_text = parts[2].strip()
-            
+            q_to_save = parts[1].lower().strip()
+            a_to_save = parts[2].strip()
             try:
-                # Prepare the new row
-                new_row = pd.DataFrame([{"question": question_word, "answer": answer_text}])
-                
-                # Send to Google Sheets
+                new_row = pd.DataFrame([{"question": q_to_save, "answer": a_to_save}])
                 conn.create(data=new_row)
-                
-                # Success Response
-                reply = f"Cloud updated! I've recorded that '{question_word}' means: {answer_text}"
-                with st.chat_message("assistant"):
-                    st.success(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-                
-                # Clear cache so it remembers the new word right now
+                response = f"✅ Cloud updated! I've recorded that '{q_to_save}' means: {a_to_save}"
                 st.cache_data.clear()
-                
             except Exception as e:
-                st.error(f"Could not save to Cloud: {e}")
+                response = f"❌ Error saving to Cloud: {e}"
         else:
-            error_msg = "To teach me, use: teach [word] [answer]"
-            with st.chat_message("assistant"):
-                st.error(error_msg)
-            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            response = "⚠️ Use format: teach [word] [answer]"
 
-    # 3. REGULAR CHAT LOGIC
+    # B. MATH CHECK
+    elif any(char.isdigit() for char in prompt) and any(op in prompt for op in "+-*/"):
+        math_result = solve_math(prompt)
+        response = math_result if math_result else "I see numbers, but I can't solve that equation yet."
+
+    # C. MEMORY CHECK (Google Sheets)
     else:
         clean_prompt = prompt.lower().strip()
-        
-        # Check if the column 'question' exists in the sheet
-        if 'question' in kb.columns:
-            # Find a row where the question matches the prompt
+        if not kb.empty and 'question' in kb.columns:
             match = kb[kb['question'].astype(str).str.lower() == clean_prompt]
-            
             if not match.empty:
-                # Get the answer from the first matching row
                 response = match.iloc[0]['answer']
             else:
-                response = "I do not know that yet. Please tell me the answer using: teach [word] [answer]"
+                response = "I do not know that. Please tell me the answer using the 'teach' command."
         else:
-            response = "Error: I can't find the 'question' column in my Brain (Google Sheet)."
+            response = "⚠️ Error: Memory columns ('question', 'answer') missing from Row 1 of Google Sheet."
 
-        # Display and save BDL's response
-        with st.chat_message("assistant"):
-            st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    # Final Response Delivery
+    with st.chat_message("assistant"):
+        st.markdown(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
