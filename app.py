@@ -1,79 +1,98 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import re
 
-# 1. SECURITY CHECK (Looks for password in Secrets)
-def check_password():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+# --- 1. APP CONFIGURATION ---
+st.set_page_config(page_title="BDL.AI - Master Brain", page_icon="🧠")
 
-    if not st.session_state.authenticated:
-        st.title("🔒 BDL.AI - Restricted Access")
-        # Pulls the password from Streamlit's hidden secrets vault
-        correct_password = st.secrets["access_settings"]["password"]
-        
-        pw = st.text_input("Enter Access Key:", type="password")
-        if st.button("Unlock Brain"):
-            if pw == correct_password:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Unauthorized Access")
-        return False
-    return True
+st.title("🧠 BDL.AI - Master Brain")
+st.markdown("---")
 
-# 2. APP LOGIC (Only runs if authenticated)
-if check_password():
-    st.set_page_config(page_title="BDL.AI Cloud", page_icon="🧠")
-    
-    # Connection to Google Sheets using Secrets
+# --- 2. CLOUD CONNECTION ---
+# This looks for your 'Digital Key' in the Streamlit Secrets box
+try:
     conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error("Connection Error: Check your Streamlit Secrets.")
+    st.stop()
 
-    def load_knowledge():
-        return conn.read(ttl=0)
+# --- 3. LOAD MEMORY ---
+# 'ttl=0' means it always checks the cloud for new answers immediately
+try:
+    kb = conn.read(ttl="0s")
+except Exception as e:
+    st.error(f"Memory Error: I can't read the Google Sheet. {e}")
+    st.stop()
 
-    def save_knowledge(df):
-        conn.update(data=df)
+# --- 4. CHAT INTERFACE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    def solve_math(text):
-        if re.match(r'^[0-9\s\+\-\*\/\(\)\.]+$', text):
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# User Input
+prompt = st.chat_input("Write to BDL here...")
+
+if prompt:
+    # 1. Show the user's message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 2. TEACH COMMAND LOGIC
+    # If the user starts a sentence with 'teach '
+    if prompt.lower().startswith("teach "):
+        parts = prompt.split(" ", 2)
+        
+        if len(parts) == 3:
+            question_word = parts[1].lower().strip()
+            answer_text = parts[2].strip()
+            
             try:
-                return eval(text, {"__builtins__": None}, {})
-            except: return None
-        return None
-
-    st.markdown('<div style="color: #28a745; font-weight: bold;">● ENCRYPTED CLOUD SESSION</div>', unsafe_allow_html=True)
-    st.title("🧠 BDL.AI - Master Brain")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "learning_question" not in st.session_state:
-        st.session_state.learning_question = None
-
-    kb = load_knowledge()
-
-    # Chat Display & Logic
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
-
-    if prompt := st.chat_input("Write to BDL here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-
-        response = ""
-        # (Standard logic: Teach, Math, Search - same as before)
-        if (math_result := solve_math(prompt)) is not None:
-            response = f"The answer is **{math_result}**."
+                # Prepare the new row
+                new_row = pd.DataFrame([{"question": question_word, "answer": answer_text}])
+                
+                # Send to Google Sheets
+                conn.create(data=new_row)
+                
+                # Success Response
+                reply = f"Cloud updated! I've recorded that '{question_word}' means: {answer_text}"
+                with st.chat_message("assistant"):
+                    st.success(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                
+                # Clear cache so it remembers the new word right now
+                st.cache_data.clear()
+                
+            except Exception as e:
+                st.error(f"Could not save to Cloud: {e}")
         else:
-            # Check Knowledge Base
-            clean_prompt = prompt.lower().strip()
-            match = kb[kb['question'] == clean_prompt]
-            if not match.empty:
-                response = match.iloc[-1]['answer']
-            else:
-                response = "I do not know that. Please tell me the answer."
-                st.session_state.learning_question = clean_prompt
+            error_msg = "To teach me, use: teach [word] [answer]"
+            with st.chat_message("assistant"):
+                st.error(error_msg)
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
-        with st.chat_message("assistant"): st.markdown(response)
+    # 3. REGULAR CHAT LOGIC
+    else:
+        clean_prompt = prompt.lower().strip()
+        
+        # Check if the column 'question' exists in the sheet
+        if 'question' in kb.columns:
+            # Find a row where the question matches the prompt
+            match = kb[kb['question'].astype(str).str.lower() == clean_prompt]
+            
+            if not match.empty:
+                # Get the answer from the first matching row
+                response = match.iloc[0]['answer']
+            else:
+                response = "I do not know that yet. Please tell me the answer using: teach [word] [answer]"
+        else:
+            response = "Error: I can't find the 'question' column in my Brain (Google Sheet)."
+
+        # Display and save BDL's response
+        with st.chat_message("assistant"):
+            st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
