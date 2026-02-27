@@ -2,14 +2,18 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. PAGE CONFIGURATION ---
+#--------------------
+# PAGE CONFIGURATION
+#--------------------
 st.set_page_config(
     page_title="BDL.AI - Master Brain",
     page_icon="🧠",
     layout="centered"
 )
 
-# --- 2. CUSTOM CSS (To keep that "Master Brain" Look) ---
+#--------------------
+# CUSTOM CSS STYLING
+#--------------------
 st.markdown("""
     <style>
     .main {
@@ -26,9 +30,11 @@ st.markdown("""
         text-shadow: 0 0 10px #00d4ff;
     }
     </style>
-    """, unsafe_allow_html=True) # FIXED: Changed from unsafe_allow_name_container
+    """, unsafe_allow_html=True)
 
-# --- 3. INITIALIZE SESSION STATE ---
+#--------------------
+# INITIALIZE SESSION STATE
+#--------------------
 if "waiting_for_answer" not in st.session_state:
     st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state:
@@ -36,7 +42,9 @@ if "last_question" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. GOOGLE SHEETS CONNECTION ---
+#--------------------
+# GOOGLE SHEETS CONNECTION
+#--------------------
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
@@ -47,7 +55,9 @@ def load_brain():
     """Reads the live Google Sheet."""
     return conn.read(ttl=0)
 
-# --- 5. SIDEBAR (Utilities) ---
+#--------------------
+# SIDEBAR UTILITIES
+#--------------------
 with st.sidebar:
     st.title("⚙️ Brain Settings")
     if st.button("Clear Chat History"):
@@ -58,16 +68,22 @@ with st.sidebar:
     st.write("Current Session: **Encrypted Cloud**")
     st.info("BDL learns automatically. If it doesn't know an answer, tell it the answer in the next message.")
 
-# --- 6. HEADER ---
+#--------------------
+# UI HEADER
+#--------------------
 st.title("🧠 BDL.AI - Master Brain")
 st.caption("v2.0 - Self-Learning Neural Network via Google Sheets")
 
-# --- 7. DISPLAY CHAT HISTORY ---
+#--------------------
+# DISPLAY CHAT HISTORY
+#--------------------
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 8. THE BRAIN LOGIC ---
+#--------------------
+# THE BRAIN LOGIC
+#--------------------
 if prompt := st.chat_input("Write to BDL here..."):
     # Add user message to UI
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -78,7 +94,6 @@ if prompt := st.chat_input("Write to BDL here..."):
     if st.session_state.waiting_for_answer:
         with st.spinner("Writing to Cloud..."):
             try:
-                # Get existing data
                 df = load_brain()
                 
                 # Prepare the new entry
@@ -104,20 +119,19 @@ if prompt := st.chat_input("Write to BDL here..."):
         try:
             df = load_brain()
             
-            # Search the 'question' column for a match
-            # We use .fillna('') to prevent crashes on empty cells
+            # Search logic
             match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
             
             if not match.empty:
                 response = match.iloc[0]['answer']
             else:
-                response = "I do not know that yet. **What should the answer be?** (The next thing you type will be saved as the official answer)."
+                response = "I do not know that yet. **What should the answer be?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
         except Exception as e:
-            response = "Error accessing the Brain. Make sure your Google Sheet columns are named 'question' and 'answer'."
+            response = "Error accessing the Brain. Check your Google Sheet columns."
 
-    # Add assistant response to UI
+    # Final response output
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
