@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -21,16 +20,13 @@ st.markdown("""
         padding: 10px;
         margin-bottom: 10px;
     }
-    .st-emotion-cache-1c7n2ka { 
-        background-color: #1f2937; /* Darker chat bubbles */
-    }
     h1 {
         color: #00d4ff;
         text-align: center;
         text-shadow: 0 0 10px #00d4ff;
     }
     </style>
-    """, unsafe_allow_name_container=True)
+    """, unsafe_allow_html=True) # FIXED: Changed from unsafe_allow_name_container
 
 # --- 3. INITIALIZE SESSION STATE ---
 if "waiting_for_answer" not in st.session_state:
@@ -105,18 +101,21 @@ if prompt := st.chat_input("Write to BDL here..."):
 
     # B. THE RETRIEVAL PHASE
     else:
-        df = load_brain()
-        
-        # Search the 'question' column for a match
-        # We use .fillna('') to prevent crashes on empty cells
-        match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
-        
-        if not match.empty:
-            response = match.iloc[0]['answer']
-        else:
-            response = "I do not know that yet. **What should the answer be?** (The next thing you type will be saved as the official answer)."
-            st.session_state.waiting_for_answer = True
-            st.session_state.last_question = prompt
+        try:
+            df = load_brain()
+            
+            # Search the 'question' column for a match
+            # We use .fillna('') to prevent crashes on empty cells
+            match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
+            
+            if not match.empty:
+                response = match.iloc[0]['answer']
+            else:
+                response = "I do not know that yet. **What should the answer be?** (The next thing you type will be saved as the official answer)."
+                st.session_state.waiting_for_answer = True
+                st.session_state.last_question = prompt
+        except Exception as e:
+            response = "Error accessing the Brain. Make sure your Google Sheet columns are named 'question' and 'answer'."
 
     # Add assistant response to UI
     with st.chat_message("assistant"):
