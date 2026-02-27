@@ -74,10 +74,13 @@ st.markdown("""
 #--------------------
 # INITIALIZE SESSION STATE
 #--------------------
+# These "sticky notes" keep track of the conversation flow
 if "waiting_for_answer" not in st.session_state:
     st.session_state.waiting_for_answer = False
+
 if "last_question" not in st.session_state:
     st.session_state.last_question = ""
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -85,15 +88,16 @@ if "messages" not in st.session_state:
 # GOOGLE SHEETS CONNECTION
 #--------------------
 try:
+    # Attempting to link to the Master Brain Spreadsheet
     conn = st.connection("gsheets", type=GSheetsConnection)
     connection_status = "Online"
 except Exception as e:
     connection_status = "Offline"
-    st.error(f"Connection Error: {e}")
+    st.error(f"Critical Connection Error: {e}")
     st.stop()
 
-def load_brain():
-    """Reads the live Google Sheet."""
+def load_brain_data():
+    """Helper function to fetch the latest data with zero cache."""
     return conn.read(ttl=0)
 
 #--------------------
@@ -113,69 +117,106 @@ with st.sidebar:
     else:
         st.error("🔴 BRAIN OFFLINE")
         
-    if st.button("Clear Chat History"):
+    st.markdown("---")
+    
+    # Reset Button
+    if st.button("Clear Visual History"):
         st.session_state.messages = []
         st.rerun()
     
     st.markdown("---")
-    st.write("Session: **Encrypted**")
-    st.info("BDL learns automatically from your inputs.")
+    st.write("System Status: **Encrypted**")
+    st.info("Commands recognized:\n- 'forget that': Erase last memory")
 
 #--------------------
 # UI HEADER
 #--------------------
 st.title("🧠 BDL.AI - Master Brain")
-st.caption("v2.1 - Self-Learning Neural Network via Google Sheets")
+st.caption("v2.2.1 - Enhanced Performance & Self-Learning Logic")
 
 #--------------------
 # DISPLAY CHAT HISTORY
 #--------------------
+# This loop renders every previous message so they don't disappear
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 #--------------------
-# THE BRAIN LOGIC
+# THE MASTER BRAIN LOGIC
 #--------------------
-if prompt := st.chat_input("Write to BDL here..."):
+if prompt := st.chat_input("Communicate with BDL..."):
+    # Immediately show the user's message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # A. THE LEARNING PHASE
-    if st.session_state.waiting_for_answer:
-        with st.spinner("Syncing to Cloud..."):
+    # --- BLOCK 1: FORGET COMMAND ---
+    # If the user made a mistake, wipe the last entry in the sheet
+    if prompt.lower().strip() == "forget that":
+        with st.spinner("Deleting memory from cloud..."):
             try:
-                df = load_brain()
-                new_row = pd.DataFrame([{
+                df = load_brain_data()
+                if not df.empty:
+                    last_q = df.iloc[-1]['question']
+                    updated_df = df.drop(df.tail(1).index)
+                    conn.update(data=updated_df)
+                    response = f"🗑️ **Memory Wiped.** I have forgotten: '{last_q}'."
+                else:
+                    response = "Brain is already empty. Nothing to forget!"
+            except Exception as e:
+                response = f"❌ Error during deletion: {e}"
+
+    # --- BLOCK 2: LEARNING PHASE ---
+    # This runs only if BDL just said "I don't know" in the previous turn
+    elif st.session_state.waiting_for_answer:
+        with st.spinner("Saving new neural connection..."):
+            try:
+                df = load_brain_data()
+                
+                # Format the new knowledge
+                new_entry = pd.DataFrame([{
                     "question": st.session_state.last_question.strip().lower(),
                     "answer": prompt.strip()
                 }])
-                updated_df = pd.concat([df, new_row], ignore_index=True)
-                conn.update(data=updated_df)
                 
-                response = f"✅ **Memory Secured.** I've learned that '{st.session_state.last_question}' means: '{prompt}'."
+                # Combine and sync back to Google Sheets
+                updated_brain = pd.concat([df, new_entry], ignore_index=True)
+                conn.update(data=updated_brain)
+                
+                response = f"✅ **Knowledge Secured.** Next time you ask '{st.session_state.last_question}', I will answer with that."
+                
+                # Reset the learning flag
                 st.session_state.waiting_for_answer = False
                 st.session_state.last_question = ""
             except Exception as e:
-                response = f"❌ **Cloud Error:** {e}"
+                response = f"❌ Cloud Sync Error: {e}"
 
-    # B. THE RETRIEVAL PHASE
+    # --- BLOCK 3: RETRIEVAL PHASE ---
+    # Normal mode: Look for an answer in the sheet
     else:
         try:
-            df = load_brain()
+            df = load_brain_data()
+            
+            # Look for an exact match (ignoring capitalization)
             match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
             
             if not match.empty:
                 response = match.iloc[0]['answer']
             else:
+                # If nothing is found, enter Learning Mode
                 response = "I do not know that yet. **What should the answer be?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
         except Exception as e:
-            response = "⚠️ Error accessing the Brain. Check Sheet columns."
+            response = "⚠️ Connection to Brain interrupted. Please check your credentials."
 
-    # Final response output
+    # --- FINAL OUTPUT ---
+    # Show BDL's response and save it to history
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
+#--------------------
+# END OF SCRIPT
+#--------------------
