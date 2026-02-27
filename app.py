@@ -12,22 +12,61 @@ st.set_page_config(
 )
 
 #--------------------
-# CUSTOM CSS STYLING
+# CUSTOM CSS & PULSE ANIMATION
 #--------------------
 st.markdown("""
     <style>
+    /* Main Background */
     .main {
         background-color: #0e1117;
     }
+    
+    /* Chat Bubbles */
     .stChatMessage {
         border-radius: 15px;
         padding: 10px;
         margin-bottom: 10px;
     }
+    
+    /* Title Styling */
     h1 {
         color: #00d4ff;
         text-align: center;
         text-shadow: 0 0 10px #00d4ff;
+    }
+
+    /* The Pulsing Light Effect */
+    .pulse-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: bold;
+        color: #00ff00;
+        margin-bottom: 20px;
+    }
+
+    .pulse-circle {
+        width: 12px;
+        height: 12px;
+        background-color: #00ff00;
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 10px rgba(0, 255, 0, 0);
+        }
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -63,25 +102,30 @@ def load_brain():
 with st.sidebar:
     st.title("⚙️ Brain Settings")
     
-    # Brain Status Indicator
+    # Pulsing Status Indicator
     if connection_status == "Online":
-        st.success("🟢 Brain Status: Online")
+        st.markdown("""
+            <div class="pulse-container">
+                <div class="pulse-circle"></div>
+                <span>BRAIN ONLINE</span>
+            </div>
+        """, unsafe_allow_html=True)
     else:
-        st.error("🔴 Brain Status: Offline")
+        st.error("🔴 BRAIN OFFLINE")
         
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
     
     st.markdown("---")
-    st.write("Current Session: **Encrypted Cloud**")
-    st.info("BDL learns automatically. If it doesn't know an answer, tell it the answer in the next message.")
+    st.write("Session: **Encrypted**")
+    st.info("BDL learns automatically from your inputs.")
 
 #--------------------
 # UI HEADER
 #--------------------
 st.title("🧠 BDL.AI - Master Brain")
-st.caption("v2.0 - Self-Learning Neural Network via Google Sheets")
+st.caption("v2.1 - Self-Learning Neural Network via Google Sheets")
 
 #--------------------
 # DISPLAY CHAT HISTORY
@@ -94,41 +138,32 @@ for message in st.session_state.messages:
 # THE BRAIN LOGIC
 #--------------------
 if prompt := st.chat_input("Write to BDL here..."):
-    # Add user message to UI
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     # A. THE LEARNING PHASE
     if st.session_state.waiting_for_answer:
-        with st.spinner("Writing to Cloud..."):
+        with st.spinner("Syncing to Cloud..."):
             try:
                 df = load_brain()
-                
-                # Prepare the new entry
                 new_row = pd.DataFrame([{
                     "question": st.session_state.last_question.strip().lower(),
                     "answer": prompt.strip()
                 }])
-                
-                # Append and Update
                 updated_df = pd.concat([df, new_row], ignore_index=True)
                 conn.update(data=updated_df)
                 
-                response = f"✅ **Memory Secured.** I now know that '{st.session_state.last_question}' means: '{prompt}'."
-                
-                # Reset learning state
+                response = f"✅ **Memory Secured.** I've learned that '{st.session_state.last_question}' means: '{prompt}'."
                 st.session_state.waiting_for_answer = False
                 st.session_state.last_question = ""
             except Exception as e:
-                response = f"❌ **Cloud Error:** I couldn't save that. Error: {e}"
+                response = f"❌ **Cloud Error:** {e}"
 
     # B. THE RETRIEVAL PHASE
     else:
         try:
             df = load_brain()
-            
-            # Search logic
             match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
             
             if not match.empty:
@@ -138,7 +173,7 @@ if prompt := st.chat_input("Write to BDL here..."):
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
         except Exception as e:
-            response = "Error accessing the Brain. Check your Google Sheet columns."
+            response = "⚠️ Error accessing the Brain. Check Sheet columns."
 
     # Final response output
     with st.chat_message("assistant"):
