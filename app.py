@@ -109,8 +109,24 @@ if prompt := st.chat_input("Communicate with BDL..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    response = ""
+
+    # --- BLOCK 0: CALCULATOR MODULE (NEW) ---
+    # This checks for numbers and math symbols (+, -, *, /)
+    import re
+    math_pattern = r"^[\d\+\-\*\/\(\)\s\.]+$"
+    
+    # If the input looks like math and doesn't have a stored answer yet
+    if re.match(math_pattern, prompt.strip()):
+        try:
+            # Dangerous to use 'eval', but 'pd.eval' is safer for simple math
+            result = pd.eval(prompt)
+            response = f"🔢 **Calculation Result:** {result}"
+        except:
+            pass # If math fails, it will move to retrieval/learning
+
     # --- BLOCK 1: FORGET COMMAND ---
-    if prompt.lower().strip() == "forget that":
+    if not response and prompt.lower().strip() == "forget that":
         with st.spinner("Erasing last neural link..."):
             try:
                 df = load_brain_data()
@@ -125,31 +141,30 @@ if prompt := st.chat_input("Communicate with BDL..."):
                 response = f"❌ Error: {e}"
 
     # --- BLOCK 2: LEARNING PHASE ---
-    elif st.session_state.waiting_for_answer:
+    elif not response and st.session_state.waiting_for_answer:
         with st.spinner("Syncing to Cloud..."):
             try:
                 df = load_brain_data()
                 new_row = pd.DataFrame([{"question": st.session_state.last_question.strip().lower(), "answer": prompt.strip()}])
                 updated_df = pd.concat([df, new_row], ignore_index=True)
                 conn.update(data=updated_df)
-                response = f"✅ **Memory Secured.** I've learned that '{st.session_state.last_question}' means: '{prompt}'."
+                response = f"✅ **Memory Secured.** Learned that '{st.session_state.last_question}' means: '{prompt}'."
                 st.session_state.waiting_for_answer = False
                 st.session_state.last_question = ""
             except Exception as e:
                 response = f"❌ Cloud Error: {e}"
 
     # --- BLOCK 3: RETRIEVAL PHASE (SMART MATCH) ---
-    else:
+    elif not response:
         try:
             from thefuzz import process, fuzz
             df = load_brain_data()
             questions_list = df['question'].fillna('').tolist()
             
             if questions_list:
-                # Fuzzy Search for the best match
                 best_match, score = process.extractOne(prompt, questions_list, scorer=fuzz.token_sort_ratio)
 
-                if score >= 80:
+                if score >= confidence_level:
                     response = df[df['question'] == best_match].iloc[0]['answer']
                 else:
                     response = "I do not know that yet. **What should the answer be?**"
@@ -160,10 +175,16 @@ if prompt := st.chat_input("Communicate with BDL..."):
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
         except Exception as e:
-            response = "⚠️ Brain Access Error. Check your Sheet columns and requirements.txt."
+            response = "⚠️ Brain Access Error. Check your Sheet columns."
+
+   
+#--------------------
+# END OF SCRIPT
+#--------------------
 
     # Final response output
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
 
