@@ -68,12 +68,23 @@ with st.sidebar:
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>BRAIN ONLINE</span></div>', unsafe_allow_html=True)
     else:
         st.error("🔴 BRAIN OFFLINE")
-        
+
+    # NEW: The Confidence Slider
+    st.markdown("---")
+    st.write("🧠 **Smart Match Sensitivity**")
+    confidence_level = st.sidebar.slider(
+        "Higher = Stricter", 
+        min_value=50, 
+        max_value=100, 
+        value=80,
+        help="How closely your typing must match the brain's memory to get an answer."
+    )
+    
+    st.markdown("---")
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
     
-    st.markdown("---")
     st.info("Commands:\n- 'forget that': Deletes the last learned item.")
 
 #--------------------
@@ -155,3 +166,4 @@ if prompt := st.chat_input("Communicate with BDL..."):
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
