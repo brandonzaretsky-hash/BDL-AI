@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
-import base64
+import re
 
 #--------------------
 # PAGE CONFIGURATION
@@ -47,6 +47,7 @@ try:
     connection_status = "Online"
 except Exception:
     connection_status = "Offline"
+    st.error("Connection to Google Cloud failed.")
     st.stop()
 
 def load_brain_data():
@@ -59,15 +60,15 @@ with st.sidebar:
     st.title("🔐 Master Control")
     password_input = st.text_input("Admin Key", type="password")
     
-    # 1. ADMIN CHECK
+    # Check if the correct key is entered (Default: admin123)
     if password_input == "admin123":
         st.session_state.is_admin = True
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
         
-        # Load data for analytics
+        # Load fresh data for the dashboard
         df = load_brain_data()
         
-        # --- FEATURE 1: PENDING REVIEW ---
+        # --- 1. MODERATION: INDIVIDUAL REVIEW ---
         pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         if not pending_df.empty:
             st.warning(f"🔔 {len(pending_df)} New Requests!")
@@ -77,6 +78,7 @@ with st.sidebar:
             for index, row in pending_df.iterrows():
                 with st.expander(f"Q: {row['question'][:15]}..."):
                     st.write(f"**A:** {row['answer']}")
+                    st.write(f"📅 {row.get('timestamp', 'N/A')}")
                     col1, col2 = st.columns(2)
                     if col1.button("✅", key=f"app_{index}"):
                         df.at[index, 'status'] = 'verified'
@@ -86,70 +88,38 @@ with st.sidebar:
                         conn.update(data=df.drop(index))
                         st.rerun()
 
-        # --- FEATURE 2: BRAIN ANALYTICS ---
+        # --- 2. ANALYTICS: GROWTH CHART ---
         st.markdown("---")
         st.markdown("### 📊 Brain Growth")
         if not df.empty and 'timestamp' in df.columns:
-            # Clean and prepare date data
             df['date_only'] = pd.to_datetime(df['timestamp']).dt.date
             growth_data = df.groupby('date_only').size().reset_index(name='Memories')
-            st.bar_chart(growth_data.set_index('Date_only' if 'Date_only' in growth_data else 'date_only'), color="#00d4ff")
-            
-            # Quick Stats
-            st.write(f"🧠 Total Size: **{len(df)}**")
+            st.bar_chart(growth_data.set_index('date_only'), color="#00d4ff")
         
-        # --- FEATURE 3: WORD CLOUD ---
+        # --- 3. ANALYTICS: WORD CLOUD ---
         st.markdown("---")
         st.markdown("### ☁️ Common Topics")
         if not df.empty:
             all_text = " ".join(df['question'].astype(str)).lower()
-            # Simple word frequency (top 5 words)
-            words = pd.Series(all_text.split()).value_counts().head(5)
-            for word, count in words.items():
+            word_counts = pd.Series(all_text.split()).value_counts().head(5)
+            for word, count in word_counts.items():
                 st.write(f"**{word}** ({count}x)")
-
-    # 2. USER MODE (If no password)
     else:
         st.session_state.is_admin = False
-        st.info("User Mode: Suggestions will be sent to Admin.")
-        
+        st.info("User Mode: Suggestions sent to Admin for review.")
+
     st.markdown("---")
-    if st.button("Clear Visual Chat"):
+    if st.button("Clear Chat UI"):
         st.session_state.messages = []
         st.rerun()
-#--------------------
-# BRAIN ANALYTICS (ADMIN ONLY)
-#--------------------
-st.markdown("---")
-st.markdown("### 📊 Brain Growth")
-
-if not df.empty and 'timestamp' in df.columns:
-    # 1. Convert timestamp column to actual dates
-    df['date_only'] = pd.to_datetime(df['timestamp']).dt.date
-    
-    # 2. Count how many entries per day
-    growth_data = df.groupby('date_only').size().reset_index(name='New Memories')
-    
-    # 3. Rename columns for the chart
-    growth_data.columns = ['Date', 'Memories']
-    
-    # 4. Display the Chart
-    st.bar_chart(growth_data.set_index('Date'), color="#00d4ff")
-    
-    # 5. Quick Stats
-    total_memories = len(df)
-    verified_memories = len(df[df['status'] == 'verified'])
-    st.write(f"Total Brain Size: **{total_memories}**")
-    st.write(f"Verified Knowledge: **{verified_memories}**")
-else:
-    st.info("No analytics data available yet. Start teaching BDL!")
 
 #--------------------
-# MAIN UI
+# MAIN UI HEADER
 #--------------------
 st.title("🧠 BDL.AI - Master Brain")
-st.caption("v2.5 - Admin Dashboard & Moderation Engine")
+st.caption("v2.6 - Full Moderation & Analytics Engine Active")
 
+# Display previous chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]): st.markdown(message["content"])
 
@@ -162,13 +132,13 @@ if prompt := st.chat_input("Ask BDL..."):
 
     response = ""
 
-    # --- MATH CALCULATOR ---
-    import re
+    # --- BLOCK 0: MATH CALCULATOR ---
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-        try: response = f"🔢 **Result:** {pd.eval(prompt)}"
+        try: 
+            response = f"🔢 **Result:** {pd.eval(prompt)}"
         except: pass
 
-    # --- FORGET (ADMIN ONLY) ---
+    # --- BLOCK 1: FORGET COMMAND (ADMIN ONLY) ---
     if not response and prompt.lower().strip() == "forget that":
         if st.session_state.is_admin:
             df = load_brain_data()
@@ -176,35 +146,36 @@ if prompt := st.chat_input("Ask BDL..."):
                 last_q = df.iloc[-1]['question']
                 conn.update(data=df.drop(df.tail(1).index))
                 response = f"🗑️ **Forgotten:** '{last_q}'"
-        else: response = "🚫 Admin access required."
+        else: response = "🚫 Admin access required to erase memory."
 
-    # --- LEARNING & METADATA (FEATURE 3) ---
+    # --- BLOCK 2: LEARNING & METADATA ---
     elif not response and st.session_state.waiting_for_answer:
         df = load_brain_data()
         status = "verified" if st.session_state.is_admin else "pending"
-        # Adding Timestamp (Metadata)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         new_row = pd.DataFrame([{
             "question": st.session_state.last_question.lower(), 
             "answer": prompt, 
             "status": status,
-            "timestamp": now # Feature 3: Records when it happened
+            "timestamp": now
         }])
         
         conn.update(data=pd.concat([df, new_row], ignore_index=True))
         response = "✅ Learned!" if st.session_state.is_admin else "📩 Suggestion saved for Admin review."
         st.session_state.waiting_for_answer = False
 
-    # --- SMART RETRIEVAL ---
+    # --- BLOCK 3: SMART RETRIEVAL (FUZZY MATCH) ---
     elif not response:
         from thefuzz import process, fuzz
         df = load_brain_data()
+        # Filter for verified entries only
         verified_df = df[df['status'] == 'verified'] if 'status' in df.columns else df
         questions = verified_df['question'].fillna('').tolist()
         
         if questions:
             best_match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+            # 80% similarity threshold
             if score >= 80:
                 response = verified_df[verified_df['question'] == best_match].iloc[0]['answer']
         
@@ -213,7 +184,6 @@ if prompt := st.chat_input("Ask BDL..."):
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
+    # Show BDL's response
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
-
-
