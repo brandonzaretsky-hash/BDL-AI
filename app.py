@@ -47,7 +47,9 @@ if "messages" not in st.session_state:
 #--------------------
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
+    connection_status = "Online"
 except Exception as e:
+    connection_status = "Offline"
     st.error(f"Connection Error: {e}")
     st.stop()
 
@@ -60,6 +62,13 @@ def load_brain():
 #--------------------
 with st.sidebar:
     st.title("⚙️ Brain Settings")
+    
+    # Brain Status Indicator
+    if connection_status == "Online":
+        st.success("🟢 Brain Status: Online")
+    else:
+        st.error("🔴 Brain Status: Offline")
+        
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
