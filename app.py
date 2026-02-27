@@ -192,7 +192,7 @@ if prompt := st.chat_input("Communicate with BDL..."):
             except Exception as e:
                 response = f"❌ Cloud Sync Error: {e}"
 
-    #--------------------
+#--------------------
 # BLOCK 3: RETRIEVAL PHASE (WITH SMART MATCH)
 #--------------------
     else:
@@ -221,37 +221,7 @@ if prompt := st.chat_input("Communicate with BDL..."):
             # 2. Find the "Best Match" using Fuzzy Logic
             # This looks for the closest sentence even if there are typos
             best_match, score = process.extractOne(prompt, questions_list, scorer=fuzz.token_sort_ratio)
-            
-            #--------------------
-# BLOCK 3: RETRIEVAL PHASE (WITH SMART MATCH)
-#--------------------
-    else:
-        try:
-            from thefuzz import process, fuzz
-            df = load_brain_data()
-            
-            # 1. Clean up the sheet data (remove empty rows)
-            questions_list = df['question'].fillna('').tolist()
-            
-            if questions_list:
-                # 2. Find the "Best Match" using Fuzzy Logic
-                best_match, score = process.extractOne(prompt, questions_list, scorer=fuzz.token_sort_ratio)
-
-                # 3. Decision Logic: If match is better than 80%, answer it.
-                if score >= 80:
-                    response = df[df['question'] == best_match].iloc[0]['answer']
-                else:
-                    response = "I do not know that yet. **What should the answer be?**"
-                    st.session_state.waiting_for_answer = True
-                    st.session_state.last_question = prompt
-            else:
-                response = "My brain is currently empty! Ask me something to teach me."
-                st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt
-                
-        except Exception as e:
-            response = f"⚠️ Smart Match Error: {e}. Check if 'thefuzz' is in requirements.txt"
-#--------------------
+          
 
     # --- FINAL OUTPUT ---
     # Show BDL's response and save it to history
@@ -262,5 +232,6 @@ if prompt := st.chat_input("Communicate with BDL..."):
 #--------------------
 # END OF SCRIPT
 #--------------------
+
 
 
