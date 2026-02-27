@@ -59,43 +59,64 @@ with st.sidebar:
     st.title("🔐 Master Control")
     password_input = st.text_input("Admin Key", type="password")
     
-    if password_input == "BDL real":
+    # 1. ADMIN CHECK
+    if password_input == "admin123":
         st.session_state.is_admin = True
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
         
-        # --- NOTIFICATION SOUND (FEATURE 2) ---
+        # Load data for analytics
         df = load_brain_data()
-        pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         
+        # --- FEATURE 1: PENDING REVIEW ---
+        pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         if not pending_df.empty:
             st.warning(f"🔔 {len(pending_df)} New Requests!")
-            # Hidden audio player for the "Ding"
-            st.components.v1.html("""
-                <audio autoplay>
-                    <source src="https://www.soundjay.com/buttons/sounds/button-3.mp3" type="audio/mpeg">
-                </audio>
-            """, height=0)
-
-            # --- INDIVIDUAL REVIEW TABLE (FEATURE 1) ---
+            st.components.v1.html("<audio autoplay><source src='https://www.soundjay.com/buttons/sounds/button-3.mp3'></audio>", height=0)
+            
             st.markdown("### 📝 Pending Review")
             for index, row in pending_df.iterrows():
-                with st.expander(f"Q: {row['question'][:20]}..."):
-                    st.write(f"**Answer:** {row['answer']}")
-                    st.write(f"**Time:** {row.get('timestamp', 'Unknown')}")
-                    
+                with st.expander(f"Q: {row['question'][:15]}..."):
+                    st.write(f"**A:** {row['answer']}")
                     col1, col2 = st.columns(2)
-                    if col1.button("✅ Appr", key=f"app_{index}"):
+                    if col1.button("✅", key=f"app_{index}"):
                         df.at[index, 'status'] = 'verified'
                         conn.update(data=df)
                         st.rerun()
-                    if col2.button("🗑️ Del", key=f"del_{index}"):
-                        df = df.drop(index)
-                        conn.update(data=df)
+                    if col2.button("🗑️", key=f"del_{index}"):
+                        conn.update(data=df.drop(index))
                         st.rerun()
+
+        # --- FEATURE 2: BRAIN ANALYTICS ---
+        st.markdown("---")
+        st.markdown("### 📊 Brain Growth")
+        if not df.empty and 'timestamp' in df.columns:
+            # Clean and prepare date data
+            df['date_only'] = pd.to_datetime(df['timestamp']).dt.date
+            growth_data = df.groupby('date_only').size().reset_index(name='Memories')
+            st.bar_chart(growth_data.set_index('Date_only' if 'Date_only' in growth_data else 'date_only'), color="#00d4ff")
+            
+            # Quick Stats
+            st.write(f"🧠 Total Size: **{len(df)}**")
+        
+        # --- FEATURE 3: WORD CLOUD ---
+        st.markdown("---")
+        st.markdown("### ☁️ Common Topics")
+        if not df.empty:
+            all_text = " ".join(df['question'].astype(str)).lower()
+            # Simple word frequency (top 5 words)
+            words = pd.Series(all_text.split()).value_counts().head(5)
+            for word, count in words.items():
+                st.write(f"**{word}** ({count}x)")
+
+    # 2. USER MODE (If no password)
     else:
         st.session_state.is_admin = False
         st.info("User Mode: Suggestions will be sent to Admin.")
         
+    st.markdown("---")
+    if st.button("Clear Visual Chat"):
+        st.session_state.messages = []
+        st.rerun()
 #--------------------
 # BRAIN ANALYTICS (ADMIN ONLY)
 #--------------------
@@ -194,4 +215,5 @@ if prompt := st.chat_input("Ask BDL..."):
 
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
 
