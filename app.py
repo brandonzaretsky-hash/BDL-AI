@@ -95,6 +95,33 @@ with st.sidebar:
     else:
         st.session_state.is_admin = False
         st.info("User Mode: Suggestions will be sent to Admin.")
+        
+#--------------------
+# BRAIN ANALYTICS (ADMIN ONLY)
+#--------------------
+st.markdown("---")
+st.markdown("### 📊 Brain Growth")
+
+if not df.empty and 'timestamp' in df.columns:
+    # 1. Convert timestamp column to actual dates
+    df['date_only'] = pd.to_datetime(df['timestamp']).dt.date
+    
+    # 2. Count how many entries per day
+    growth_data = df.groupby('date_only').size().reset_index(name='New Memories')
+    
+    # 3. Rename columns for the chart
+    growth_data.columns = ['Date', 'Memories']
+    
+    # 4. Display the Chart
+    st.bar_chart(growth_data.set_index('Date'), color="#00d4ff")
+    
+    # 5. Quick Stats
+    total_memories = len(df)
+    verified_memories = len(df[df['status'] == 'verified'])
+    st.write(f"Total Brain Size: **{total_memories}**")
+    st.write(f"Verified Knowledge: **{verified_memories}**")
+else:
+    st.info("No analytics data available yet. Start teaching BDL!")
 
 #--------------------
 # MAIN UI
@@ -167,3 +194,4 @@ if prompt := st.chat_input("Ask BDL..."):
 
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
