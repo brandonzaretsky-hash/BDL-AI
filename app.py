@@ -1,107 +1,124 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import re
+from streamlit_gsheets import GSheetsConnection
+from datetime import datetime
 
-# --- 1. APP CONFIGURATION ---
-st.set_page_config(page_title="BDL.AI - Master Brain", page_icon="🧠")
+# --- 1. PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="BDL.AI - Master Brain",
+    page_icon="🧠",
+    layout="centered"
+)
 
-# --- 2. PASSWORD PROTECTION ---
-# This looks for the password you set in Streamlit Secrets
-def check_password():
-    if "password_correct" not in st.session_state:
-        st.session_state.password_correct = False
+# --- 2. CUSTOM CSS (To keep that "Master Brain" Look) ---
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stChatMessage {
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    .st-emotion-cache-1c7n2ka { 
+        background-color: #1f2937; /* Darker chat bubbles */
+    }
+    h1 {
+        color: #00d4ff;
+        text-align: center;
+        text-shadow: 0 0 10px #00d4ff;
+    }
+    </style>
+    """, unsafe_allow_name_container=True)
 
-    if st.session_state.password_correct:
-        return True
-
-    st.title("🔐 BDL.AI - Encrypted Session")
-    password_input = st.text_input("Enter Brain Access Code:", type="password")
-    
-    # This pulls 'password' from your [access_settings] in Secrets
-    if password_input == st.secrets["access_settings"]["password"]:
-        st.session_state.password_correct = True
-        st.rerun()
-    elif password_input:
-        st.error("❌ Access Denied: Incorrect Password")
-    return False
-
-if not check_password():
-    st.stop()
-
-# --- 3. CLOUD CONNECTION & LOAD ---
-st.title("🧠 BDL.AI - Master Brain")
-st.write("● ENCRYPTED CLOUD SESSION ACTIVE")
-
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    kb = conn.read(ttl="0s")
-except Exception as e:
-    st.error(f"⚠️ Brain Connection Error: {e}")
-    st.stop()
-
-# --- 4. MATH ENGINE ---
-def solve_math(text):
-    # This looks for numbers and symbols like +, -, *, /
-    clean_text = text.replace("x", "*").replace("÷", "/")
-    equation = re.findall(r'[0-9+\-*/(). ]+', clean_text)
-    if equation:
-        try:
-            result = eval(equation[0])
-            return f"The answer is {result}"
-        except:
-            return None
-    return None
-
-# --- 5. CHAT LOGIC ---
+# --- 3. INITIALIZE SESSION STATE ---
+if "waiting_for_answer" not in st.session_state:
+    st.session_state.waiting_for_answer = False
+if "last_question" not in st.session_state:
+    st.session_state.last_question = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# --- 4. GOOGLE SHEETS CONNECTION ---
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error(f"Connection Error: {e}")
+    st.stop()
+
+def load_brain():
+    """Reads the live Google Sheet."""
+    return conn.read(ttl=0)
+
+# --- 5. SIDEBAR (Utilities) ---
+with st.sidebar:
+    st.title("⚙️ Brain Settings")
+    if st.button("Clear Chat History"):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.markdown("---")
+    st.write("Current Session: **Encrypted Cloud**")
+    st.info("BDL learns automatically. If it doesn't know an answer, tell it the answer in the next message.")
+
+# --- 6. HEADER ---
+st.title("🧠 BDL.AI - Master Brain")
+st.caption("v2.0 - Self-Learning Neural Network via Google Sheets")
+
+# --- 7. DISPLAY CHAT HISTORY ---
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-prompt = st.chat_input("Write to BDL here...")
-
-if prompt:
+# --- 8. THE BRAIN LOGIC ---
+if prompt := st.chat_input("Write to BDL here..."):
+    # Add user message to UI
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # A. TEACH COMMAND
-    if prompt.lower().startswith("teach "):
-        parts = prompt.split(" ", 2)
-        if len(parts) == 3:
-            q_to_save = parts[1].lower().strip()
-            a_to_save = parts[2].strip()
+    # A. THE LEARNING PHASE
+    if st.session_state.waiting_for_answer:
+        with st.spinner("Writing to Cloud..."):
             try:
-                new_row = pd.DataFrame([{"question": q_to_save, "answer": a_to_save}])
-                conn.create(data=new_row)
-                response = f"✅ Cloud updated! I've recorded that '{q_to_save}' means: {a_to_save}"
-                st.cache_data.clear()
+                # Get existing data
+                df = load_brain()
+                
+                # Prepare the new entry
+                new_row = pd.DataFrame([{
+                    "question": st.session_state.last_question.strip().lower(),
+                    "answer": prompt.strip()
+                }])
+                
+                # Append and Update
+                updated_df = pd.concat([df, new_row], ignore_index=True)
+                conn.update(data=updated_df)
+                
+                response = f"✅ **Memory Secured.** I now know that '{st.session_state.last_question}' means: '{prompt}'."
+                
+                # Reset learning state
+                st.session_state.waiting_for_answer = False
+                st.session_state.last_question = ""
             except Exception as e:
-                response = f"❌ Error saving to Cloud: {e}"
-        else:
-            response = "⚠️ Use format: teach [word] [answer]"
+                response = f"❌ **Cloud Error:** I couldn't save that. Error: {e}"
 
-    # B. MATH CHECK
-    elif any(char.isdigit() for char in prompt) and any(op in prompt for op in "+-*/"):
-        math_result = solve_math(prompt)
-        response = math_result if math_result else "I see numbers, but I can't solve that equation yet."
-
-    # C. MEMORY CHECK (Google Sheets)
+    # B. THE RETRIEVAL PHASE
     else:
-        clean_prompt = prompt.lower().strip()
-        if not kb.empty and 'question' in kb.columns:
-            match = kb[kb['question'].astype(str).str.lower() == clean_prompt]
-            if not match.empty:
-                response = match.iloc[0]['answer']
-            else:
-                response = "I do not know that. Please tell me the answer using the 'teach' command."
+        df = load_brain()
+        
+        # Search the 'question' column for a match
+        # We use .fillna('') to prevent crashes on empty cells
+        match = df[df['question'].fillna('').str.lower() == prompt.strip().lower()]
+        
+        if not match.empty:
+            response = match.iloc[0]['answer']
         else:
-            response = "⚠️ Error: Memory columns ('question', 'answer') missing from Row 1 of Google Sheet."
+            response = "I do not know that yet. **What should the answer be?** (The next thing you type will be saved as the official answer)."
+            st.session_state.waiting_for_answer = True
+            st.session_state.last_question = prompt
 
-    # Final Response Delivery
+    # Add assistant response to UI
     with st.chat_message("assistant"):
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
