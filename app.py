@@ -159,15 +159,14 @@ if prompt := st.chat_input("Ask BDL..."):
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
-    # --- FINAL STEP: HEBREW TRANSLATION ---
+    # --- FINAL STEP: HEBREW TRANSLATION (FIXED RTL) ---
     if hebrew_mode and response and "Result:" not in response:
         try:
             translator = GoogleTranslator(source='auto', target='iw')
             hebrew_translation = translator.translate(response)
-            response = f"{response}\n\n🇮🇱 **Hebrew:** {hebrew_translation}"
+            
+            # This HTML wrap ensures the Hebrew isn't backwards or left-aligned
+            hebrew_html = f'<div class="rtl-text">🇮🇱 {hebrew_translation}</div>'
+            response = f"{response}\n\n{hebrew_html}"
         except:
             response = f"{response}\n\n⚠️ Translation failed."
-
-    with st.chat_message("assistant"): st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
