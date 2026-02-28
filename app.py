@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
+from deep_translator import GoogleTranslator # Feature: Hebrew Support
 import re
 
 #--------------------
@@ -47,81 +48,55 @@ try:
     connection_status = "Online"
 except Exception:
     connection_status = "Offline"
-    st.error("Connection to Google Cloud failed.")
+    st.error("Connection failed.")
     st.stop()
 
 def load_brain_data():
     return conn.read(ttl=0)
 
 #--------------------
-# SIDEBAR & ADMIN DASHBOARD
+# SIDEBAR & SETTINGS
 #--------------------
 with st.sidebar:
-    st.title("🔐 Master Control")
+    st.title("⚙️ BDL Settings")
+    
+    # 1. ADMIN LOGIN
     password_input = st.text_input("Admin Key", type="password")
     
-    # Check if the correct key is entered (Default: admin123)
-    if password_input == "BDL real":
+    if password_input == "admin123":
         st.session_state.is_admin = True
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
-        
-        # Load fresh data for the dashboard
         df = load_brain_data()
         
-        # --- 1. MODERATION: INDIVIDUAL REVIEW ---
+        # FEATURE: CONFIDENCE SLIDER
+        st.markdown("---")
+        st.write("🧠 **Sensitivity**")
+        confidence_level = st.slider("Strictness", 50, 100, 85, help="Low = Loose matching, High = Exact words only.")
+        
+        # --- MODERATION PANEL ---
         pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         if not pending_df.empty:
-            st.warning(f"🔔 {len(pending_df)} New Requests!")
+            st.warning(f"🔔 {len(pending_df)} Pending")
             st.components.v1.html("<audio autoplay><source src='https://www.soundjay.com/buttons/sounds/button-3.mp3'></audio>", height=0)
-            
-            st.markdown("### 📝 Pending Review")
             for index, row in pending_df.iterrows():
-                with st.expander(f"Q: {row['question'][:15]}..."):
-                    st.write(f"**A:** {row['answer']}")
-                    st.write(f"📅 {row.get('timestamp', 'N/A')}")
-                    col1, col2 = st.columns(2)
-                    if col1.button("✅", key=f"app_{index}"):
+                with st.expander(f"Q: {row['question'][:10]}"):
+                    st.write(f"A: {row['answer']}")
+                    if st.button("✅ Approve", key=f"app_{index}"):
                         df.at[index, 'status'] = 'verified'
                         conn.update(data=df)
                         st.rerun()
-                    if col2.button("🗑️", key=f"del_{index}"):
-                        conn.update(data=df.drop(index))
-                        st.rerun()
-
-        # --- 2. ANALYTICS: GROWTH CHART ---
-        st.markdown("---")
-        st.markdown("### 📊 Brain Growth")
-        if not df.empty and 'timestamp' in df.columns:
-            df['date_only'] = pd.to_datetime(df['timestamp']).dt.date
-            growth_data = df.groupby('date_only').size().reset_index(name='Memories')
-            st.bar_chart(growth_data.set_index('date_only'), color="#00d4ff")
-        
-        # --- 3. ANALYTICS: WORD CLOUD ---
-        st.markdown("---")
-        st.markdown("### ☁️ Common Topics")
-        if not df.empty:
-            all_text = " ".join(df['question'].astype(str)).lower()
-            word_counts = pd.Series(all_text.split()).value_counts().head(5)
-            for word, count in word_counts.items():
-                st.write(f"**{word}** ({count}x)")
     else:
         st.session_state.is_admin = False
-        st.info("User Mode: Suggestions sent to Admin for review.")
+        confidence_level = 85 # Default for users
+        st.info("User Mode Active")
 
+    # FEATURE: HEBREW TRANSLATOR TOGGLE
     st.markdown("---")
+    hebrew_mode = st.toggle("🇮🇱 Translate to Hebrew", value=False)
+    
     if st.button("Clear Chat UI"):
         st.session_state.messages = []
         st.rerun()
-
-#--------------------
-# MAIN UI HEADER
-#--------------------
-st.title("🧠 BDL.AI - Master Brain")
-st.caption("v2.6 - Full Moderation & Analytics Engine Active")
-
-# Display previous chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]): st.markdown(message["content"])
 
 #--------------------
 # THE MASTER BRAIN LOGIC
@@ -132,59 +107,58 @@ if prompt := st.chat_input("Ask BDL..."):
 
     response = ""
 
-    # --- BLOCK 0: MATH CALCULATOR ---
+    # --- BLOCK 0: CALCULATOR ---
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-        try: 
-            response = f"🔢 **Result:** {pd.eval(prompt)}"
+        try: response = f"🔢 **Result:** {pd.eval(prompt)}"
         except: pass
 
-    # --- BLOCK 1: FORGET COMMAND (ADMIN ONLY) ---
-    if not response and prompt.lower().strip() == "forget that":
-        if st.session_state.is_admin:
-            df = load_brain_data()
-            if not df.empty:
-                last_q = df.iloc[-1]['question']
-                conn.update(data=df.drop(df.tail(1).index))
-                response = f"🗑️ **Forgotten:** '{last_q}'"
-        else: response = "🚫 Admin access required to erase memory."
+    # --- BLOCK 1: FORGET (ADMIN ONLY) ---
+    if not response and prompt.lower().strip() == "forget that" and st.session_state.is_admin:
+        df = load_brain_data()
+        if not df.empty:
+            last_q = df.iloc[-1]['question']
+            conn.update(data=df.drop(df.tail(1).index))
+            response = f"🗑️ Forgotten: '{last_q}'"
 
-    # --- BLOCK 2: LEARNING & METADATA ---
+    # --- BLOCK 2: LEARNING ---
     elif not response and st.session_state.waiting_for_answer:
         df = load_brain_data()
         status = "verified" if st.session_state.is_admin else "pending"
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
         new_row = pd.DataFrame([{
             "question": st.session_state.last_question.lower(), 
             "answer": prompt, 
             "status": status,
-            "timestamp": now
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }])
-        
         conn.update(data=pd.concat([df, new_row], ignore_index=True))
-        response = "✅ Learned!" if st.session_state.is_admin else "📩 Suggestion saved for Admin review."
+        response = "✅ Learned!" if st.session_state.is_admin else "📩 Sent for review."
         st.session_state.waiting_for_answer = False
 
-    # --- BLOCK 3: SMART RETRIEVAL (FUZZY MATCH) ---
+    # --- BLOCK 3: SMART RETRIEVAL (WITH SLIDER & HEBREW) ---
     elif not response:
         from thefuzz import process, fuzz
         df = load_brain_data()
-        # Filter for verified entries only
         verified_df = df[df['status'] == 'verified'] if 'status' in df.columns else df
         questions = verified_df['question'].fillna('').tolist()
         
         if questions:
             best_match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-            # 80% similarity threshold
-            if score >= 80:
+            if score >= confidence_level:
                 response = verified_df[verified_df['question'] == best_match].iloc[0]['answer']
         
         if not response:
-            response = "I don't know that. **What should the answer be?**"
+            response = "I don't know that. What is the answer?"
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
-    # Show BDL's response
+    # --- FINAL STEP: HEBREW TRANSLATION ---
+    if hebrew_mode and response and "Result:" not in response:
+        try:
+            translator = GoogleTranslator(source='auto', target='iw')
+            hebrew_translation = translator.translate(response)
+            response = f"{response}\n\n🇮🇱 **Hebrew:** {hebrew_translation}"
+        except:
+            response = f"{response}\n\n⚠️ Translation failed."
+
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
-
