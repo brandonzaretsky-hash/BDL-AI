@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
-from deep_translator import GoogleTranslator # Feature: Hebrew Support
+from deep_translator import GoogleTranslator
 import re
 
 #--------------------
@@ -18,6 +18,20 @@ st.markdown("""
     .main { background-color: #0e1117; }
     .stChatMessage { border-radius: 15px; padding: 10px; margin-bottom: 10px; }
     h1 { color: #00d4ff; text-align: center; text-shadow: 0 0 10px #00d4ff; }
+    
+    /* FIX: Right-to-Left (RTL) Styling */
+    .rtl-container {
+        direction: rtl;
+        text-align: right;
+        font-family: 'Arial', sans-serif;
+        background-color: #1f2937;
+        padding: 10px;
+        border-radius: 10px;
+        margin-top: 10px;
+        color: #ffffff;
+        border-right: 4px solid #00d4ff;
+    }
+
     .pulse-container { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #00ff00; margin-bottom: 20px; }
     .pulse-circle {
         width: 12px; height: 12px; background-color: #00ff00; border-radius: 50%;
@@ -28,14 +42,6 @@ st.markdown("""
         0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
         70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
-    }
-    /* FEATURE FIX: Right-to-Left (RTL) Support for Hebrew */
-    .rtl-text {
-        direction: RTL;
-        unicode-bidi: bidi-override;
-        text-align: right;
-        font-family: 'Arial', sans-serif;
-        font-size: 1.2rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -56,7 +62,6 @@ try:
     connection_status = "Online"
 except Exception:
     connection_status = "Offline"
-    st.error("Connection failed.")
     st.stop()
 
 def load_brain_data():
@@ -76,16 +81,15 @@ with st.sidebar:
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
         df = load_brain_data()
         
-        # FEATURE: CONFIDENCE SLIDER
+        # FEATURE 3: CONFIDENCE SLIDER
         st.markdown("---")
         st.write("🧠 **Sensitivity**")
-        confidence_level = st.slider("Strictness", 50, 100, 85, help="Low = Loose matching, High = Exact words only.")
+        confidence_level = st.slider("Strictness", 50, 100, 85)
         
-        # --- MODERATION PANEL ---
+        # MODERATION PANEL
         pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         if not pending_df.empty:
             st.warning(f"🔔 {len(pending_df)} Pending")
-            st.components.v1.html("<audio autoplay><source src='https://www.soundjay.com/buttons/sounds/button-3.mp3'></audio>", height=0)
             for index, row in pending_df.iterrows():
                 with st.expander(f"Q: {row['question'][:10]}"):
                     st.write(f"A: {row['answer']}")
@@ -95,16 +99,23 @@ with st.sidebar:
                         st.rerun()
     else:
         st.session_state.is_admin = False
-        confidence_level = 85 # Default for users
+        confidence_level = 85
         st.info("User Mode Active")
 
-    # FEATURE: HEBREW TRANSLATOR TOGGLE
+    # FEATURE 2: HEBREW TRANSLATOR TOGGLE
     st.markdown("---")
-    hebrew_mode = st.toggle("🇮🇱 Translate to Hebrew", value=False)
+    hebrew_mode = st.toggle("🇮🇱 Hebrew Learning Mode", value=False)
     
     if st.button("Clear Chat UI"):
         st.session_state.messages = []
         st.rerun()
+
+#--------------------
+# DISPLAY CHAT HISTORY
+#--------------------
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"], unsafe_allow_html=True)
 
 #--------------------
 # THE MASTER BRAIN LOGIC
@@ -114,6 +125,7 @@ if prompt := st.chat_input("Ask BDL..."):
     with st.chat_message("user"): st.markdown(prompt)
 
     response = ""
+    hebrew_translation = ""
 
     # --- BLOCK 0: CALCULATOR ---
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
@@ -142,7 +154,7 @@ if prompt := st.chat_input("Ask BDL..."):
         response = "✅ Learned!" if st.session_state.is_admin else "📩 Sent for review."
         st.session_state.waiting_for_answer = False
 
-    # --- BLOCK 3: SMART RETRIEVAL (WITH SLIDER & HEBREW) ---
+    # --- BLOCK 3: RETRIEVAL ---
     elif not response:
         from thefuzz import process, fuzz
         df = load_brain_data()
@@ -155,18 +167,21 @@ if prompt := st.chat_input("Ask BDL..."):
                 response = verified_df[verified_df['question'] == best_match].iloc[0]['answer']
         
         if not response:
-            response = "I don't know that. What is the answer?"
+            response = "I don't know that yet. **What is the answer?**"
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
-    # --- FINAL STEP: HEBREW TRANSLATION (FIXED RTL) ---
+    # --- FEATURE 2: HEBREW TRANSLATION (FIXED) ---
     if hebrew_mode and response and "Result:" not in response:
         try:
-            translator = GoogleTranslator(source='auto', target='iw')
-            hebrew_translation = translator.translate(response)
-            
-            # This HTML wrap ensures the Hebrew isn't backwards or left-aligned
-            hebrew_html = f'<div class="rtl-text">🇮🇱 {hebrew_translation}</div>'
-            response = f"{response}\n\n{hebrew_html}"
-        except:
-            response = f"{response}\n\n⚠️ Translation failed."
+            # Use 'iw' or 'hebrew' for GoogleTranslator target
+            translated_text = GoogleTranslator(source='auto', target='iw').translate(response)
+            # Wrap the translation in an RTL container for perfect formatting
+            hebrew_translation = f'<div class="rtl-container">🇮🇱 {translated_text}</div>'
+            response = f"{response}\n\n{hebrew_translation}"
+        except Exception as e:
+            response = f"{response}\n\n⚠️ (Translation Error: {e})"
+
+    with st.chat_message("assistant"):
+        st.markdown(response, unsafe_allow_html=True)
+    st.session_state.messages.append({"role": "assistant", "content": response})
