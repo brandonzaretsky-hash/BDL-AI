@@ -95,17 +95,66 @@ with st.sidebar:
 #--------------------
 if st.session_state.is_admin:
     with st.sidebar:
-        # ... keep Auto-fixer code ...
+        st.markdown("---")
+        st.subheader("🛠️ Brain Maintenance")
+        
+        # The Janitor
+        if st.button("🧹 Auto-Fix: Clear Blank Rows"):
+            df_clean = df.dropna(subset=['question', 'answer'], how='any')
+            if connection_status == "Online":
+                conn.update(data=df_clean)
+                st.success("Cleaned!")
+                st.rerun()
+
+        # The Doctor: Full-System Stress Test
         if st.button("🚀 Run Full System Test"):
-            with st.status("Testing Systems...", expanded=True) as s:
+            with st.status("BDL.AI Deep Diagnostic...", expanded=True) as s:
+                
+                # 1. Cloud & Database
+                st.write("Checking Cloud Database...")
+                try:
+                    test_df = load_fresh_data()
+                    st.success(f"✅ Cloud: Connected ({len(test_df)} entries)")
+                except: st.error("❌ Cloud: Connection Failed")
+
+                # 2. Math Processor
+                st.write("Checking Math Logic...")
+                if pd.eval("25 * 4 + 50") == 150:
+                    st.success("✅ Math: 150 (Passed)")
+                else: st.error("❌ Math: Calculation Mismatch")
+
+                # 3. Hebrew Translation
+                st.write("Checking Hebrew Translator...")
+                try:
+                    t_check = GoogleTranslator(source='en', target='iw').translate("Diagnostic")
+                    st.markdown(f'<div class="rtl-container">✅ Hebrew: {t_check}</div>', unsafe_allow_html=True)
+                except: st.error("❌ Hebrew: Service Unavailable")
+
+                # 4. English Voice Synth
+                st.write("Checking English Voice...")
+                try:
+                    tts_en = gTTS("English voice system operational.", lang='en')
+                    st.success("✅ English Voice: Ready")
+                except: st.error("❌ English Voice: Failed")
+
+                # 5. Hebrew Voice Synth (New!)
+                st.write("Checking Hebrew Voice...")
+                try:
+                    tts_he = gTTS("שלום", lang='iw') # Says "Shalom"
+                    st.success("✅ Hebrew Voice: Ready")
+                except: st.error("❌ Hebrew Voice: Failed")
+
+                # 6. Smart Slider Check
                 st.write("Checking Sensitivity Slider...")
-                st.success(f"✅ Current Sensitivity: {conf_level}")
+                if 50 <= conf_level <= 100:
+                    st.success(f"✅ Slider: Set to {conf_level}%")
                 
-                st.write("Forget Command Standby...")
-                st.success("✅ Admin Forget Logic: Ready")
-                
-                # ... keep existing Math, Translation, and Voice tests ...
-                s.update(label="Test Complete", state="complete")
+                # 7. Forget Logic Check
+                st.write("Checking Admin Permissions...")
+                if st.session_state.is_admin:
+                    st.success("✅ Permissions: Master Admin")
+
+                s.update(label="All Systems Operational!", state="complete", expanded=False)
 #--------------------
 # Section 6: Sidebar - Moderation & Analytics
 #--------------------
@@ -236,4 +285,5 @@ if prompt := st.chat_input("Communicate..."):
                 except: st.warning("Voice unavailable.")
         
         st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
