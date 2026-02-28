@@ -78,75 +78,84 @@ def load_brain_data():
     return pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
 
 #--------------------
-# SIDEBAR & MASTER CONTROL
+# MAINTENANCE & DIAGNOSTICS (ADMIN ONLY)
 #--------------------
-with st.sidebar:
-    st.title("🔐 Master Control")
-    
-    # 1. Connection & Pulse
-    if connection_status == "Online":
-        st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>CLOUD SYNC ACTIVE</span></div>', unsafe_allow_html=True)
-    else:
-        st.error("📡 OFFLINE MODE")
-
-    # 2. Admin Login
-    password_input = st.text_input("Admin Key", type="password")
-    if password_input == "admin123":
-        st.session_state.is_admin = True
-        st.success("Admin Authenticated")
-        
-        # Fresh Data Load for Admin
-        df = load_brain_data()
-        
-        # FEATURE: CONFIDENCE SLIDER
-        st.markdown("---")
-        st.write("🧠 **Match Sensitivity**")
-        conf_level = st.slider("Strictness", 50, 100, 85)
-
-        # FEATURE: OFFLINE SYNC
-        if st.session_state.offline_buffer:
-            st.warning(f"📦 {len(st.session_state.offline_buffer)} Lessons Pending Sync")
-            if st.button("🚀 Sync Offline Data"):
-                new_data = pd.DataFrame(st.session_state.offline_buffer)
-                updated_df = pd.concat([df, new_data], ignore_index=True)
-                conn.update(data=updated_df)
-                st.session_state.offline_buffer = []
-                st.success("Cloud Updated!")
-                st.rerun()
-
-        # FEATURE: INDIVIDUAL MODERATION
-        pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
-        if not pending_df.empty:
-            st.markdown("---")
-            st.warning(f"🔔 {len(pending_df)} Suggestions")
-            # Audio Alert
-            st.components.v1.html("<audio autoplay><source src='https://www.soundjay.com/buttons/sounds/button-3.mp3'></audio>", height=0)
-            for index, row in pending_df.iterrows():
-                with st.expander(f"Review: {row['question'][:15]}"):
-                    st.write(f"**A:** {row['answer']}")
-                    c1, c2 = st.columns(2)
-                    if c1.button("✅", key=f"a_{index}"):
-                        df.at[index, 'status'] = 'verified'
-                        conn.update(data=df); st.rerun()
-                    if c2.button("🗑️", key=f"d_{index}"):
-                        conn.update(data=df.drop(index)); st.rerun()
-
-        # FEATURE: ANALYTICS
-        st.markdown("---")
-        st.write("📊 **Brain Growth**")
-        if not df.empty and 'timestamp' in df.columns:
-            df['date'] = pd.to_datetime(df['timestamp']).dt.date
-            st.bar_chart(df.groupby('date').size(), color="#00d4ff")
-    else:
-        st.session_state.is_admin = False
-        conf_level = 85
-        st.info("User Mode: Teaching sends suggestions to Admin.")
-
+if st.session_state.is_admin:
     st.markdown("---")
-    hebrew_mode = st.toggle("🇮🇱 Hebrew Practice Mode")
-    if st.button("Clear Chat Window"):
-        st.session_state.messages = []
-        st.rerun()
+    st.subheader("🛠️ System Tools")
+    
+    # 1. THE AUTO-FIXER (FEATURE 2)
+    if st.button("🧹 Auto-Fix: Clear Blank Rows"):
+        with st.spinner("Cleaning Brain..."):
+            try:
+                df = load_brain_data()
+                initial_count = len(df)
+                
+                # Remove rows that are completely empty or have NaN in Q/A
+                df_clean = df.dropna(subset=['question', 'answer'], how='any')
+                # Remove rows that just have whitespace
+                df_clean = df_clean[df_clean['question'].str.strip() != ""]
+                
+                final_count = len(df_clean)
+                removed = initial_count - final_count
+                
+                if removed > 0:
+                    conn.update(data=df_clean)
+                    st.success(f"Cleaned! Removed {removed} empty neural links.")
+                else:
+                    st.info("Brain is already healthy. No empty rows found.")
+            except Exception as e:
+                st.error(f"Cleaning Error: {e}")
+
+    # 2. THE SYSTEM DIAGNOSTIC (STRESS TEST)
+    if st.button("🚀 Run Full System Test"):
+        with st.status("BDL Diagnostics: Running...", expanded=True) as status:
+            
+            # A. MATH TEST
+            st.write("Testing Math Processor...")
+            if pd.eval("150 * 2 + 50") == 350:
+                st.success("✅ Math: 350 (Passed)")
+            
+            # B. HEBREW & RTL TEST
+            st.write("Testing Hebrew Translation...")
+            try:
+                from deep_translator import GoogleTranslator
+                test_trans = GoogleTranslator(source='en', target='iw').translate("Online")
+                st.markdown(f'<div class="rtl-container">✅ Hebrew: {test_trans}</div>', unsafe_allow_html=True)
+            except: st.error("❌ Hebrew: Service Timed Out")
+
+            # C. SPEECH SYNTH TEST
+            st.write("Testing Speech Synth...")
+            try:
+                from gtts import gTTS
+                import io
+                tts = gTTS("System Operational", lang='en')
+                audio_fp = io.BytesIO()
+                tts.write_to_fp(audio_fp)
+                st.audio(audio_fp, format='audio/mp3')
+                st.success("✅ Speech: Audio Generated")
+            except: st.error("❌ Speech: gTTS not in requirements.txt")
+
+            # D. CLOUD & ANALYTICS TEST
+            st.write("Testing Database & Charts...")
+            try:
+                df_test = load_brain_data()
+                st.bar_chart(pd.DataFrame({'test': [10, 20, 15]}), height=100)
+                st.success(f"✅ Cloud & Charts: Connected ({len(df_test)} rows)")
+            except: st.error("❌ Cloud/Charts: Failed")
+
+            status.update(label="Diagnostics Complete!", state="complete", expanded=False)
+
+    # 3. BRAIN BACKUP
+    st.markdown("---")
+    if not df.empty:
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Brain Backup (.csv)",
+            data=csv,
+            file_name=f"BDL_Brain_Backup_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime='text/csv',
+        )
 
 #--------------------
 # SYSTEM DIAGNOSTIC TEST (ADMIN ONLY)
@@ -274,4 +283,5 @@ if prompt := st.chat_input("Communicate..."):
     with st.chat_message("assistant"):
         st.markdown(response, unsafe_allow_html=True)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
 
