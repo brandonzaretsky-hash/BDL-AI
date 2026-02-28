@@ -29,6 +29,14 @@ st.markdown("""
         70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
     }
+    /* FEATURE FIX: Right-to-Left (RTL) Support for Hebrew */
+    .rtl-text {
+        direction: RTL;
+        unicode-bidi: bidi-override;
+        text-align: right;
+        font-family: 'Arial', sans-serif;
+        font-size: 1.2rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -162,3 +170,4 @@ if prompt := st.chat_input("Ask BDL..."):
 
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
