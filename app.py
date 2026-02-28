@@ -19,19 +19,12 @@ st.markdown("""
     .stChatMessage { border-radius: 15px; padding: 10px; margin-bottom: 10px; }
     h1 { color: #00d4ff; text-align: center; text-shadow: 0 0 10px #00d4ff; }
     
-    /* RTL Hebrew Container */
     .rtl-container {
-        direction: rtl;
-        text-align: right;
-        background-color: #1f2937;
-        padding: 12px;
-        border-radius: 10px;
-        margin-top: 10px;
-        color: #ffffff;
-        border-right: 5px solid #00d4ff;
+        direction: rtl; text-align: right; background-color: #1f2937;
+        padding: 12px; border-radius: 10px; margin-top: 10px;
+        color: #ffffff; border-right: 5px solid #00d4ff;
     }
 
-    /* Pulsing Admin Light */
     .pulse-container { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #00ff00; margin-bottom: 20px; }
     .pulse-circle {
         width: 12px; height: 12px; background-color: #00ff00; border-radius: 50%;
@@ -72,7 +65,7 @@ def load_fresh_data():
     return pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
 
 #--------------------
-# Section 4: Sidebar - Access Control & Admin Login
+# Section 4: Sidebar - Access Control & Smart Slider
 #--------------------
 with st.sidebar:
     st.title("🔐 Master Control")
@@ -81,11 +74,16 @@ with st.sidebar:
 
     if st.session_state.is_admin:
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
+        st.markdown("---")
+        st.write("🧠 **Smart Match Sensitivity**")
+        conf_level = st.slider("Strictness", 50, 100, 85, help="Higher = Exact words only")
     else:
-        st.info("User Mode: Suggestions sent to Admin for review.")
+        st.info("User Mode Active")
+        conf_level = 85 # Default for users
     
     st.markdown("---")
     hebrew_mode = st.toggle("🇮🇱 Hebrew Practice Mode")
+    voice_mode = st.toggle("🔊 Voice Response")
     
     if st.button("Clear Visual Chat History"):
         st.session_state.messages = []
@@ -99,18 +97,18 @@ if st.session_state.is_admin:
         st.markdown("---")
         st.subheader("🛠️ Brain Maintenance")
         
-        # Auto-Fixer
         if st.button("🧹 Auto-Fix: Clear Blank Rows"):
             df_clean = df.dropna(subset=['question', 'answer'], how='any')
-            df_clean = df_clean[df_clean['question'].str.strip() != ""]
             if connection_status == "Online":
                 conn.update(data=df_clean)
-                st.success("Cloud Brain Cleaned!")
+                st.success("Cleaned!")
                 st.rerun()
 
-        # System Diagnostic
-        if st.button("🚀 Run System Stress Test"):
+        if st.button("🚀 Run Full System Test"):
             with st.status("Testing Systems...", expanded=True) as s:
+                st.write("Slider/Sensitivity Check...")
+                st.success(f"✅ Current Sensitivity: {conf_level}")
+                
                 st.write("Math...")
                 if pd.eval("100+50") == 150: st.success("✅ Math Passed")
                 
@@ -120,11 +118,11 @@ if st.session_state.is_admin:
                     st.success(f"✅ Hebrew: {t}")
                 except: st.error("❌ Translation Fail")
 
-                st.write("Speech...")
+                st.write("Voice Synth...")
                 try:
-                    tts = gTTS("Test", lang='en')
-                    st.success("✅ Speech Ready")
-                except: st.error("❌ gTTS Fail")
+                    tts_test = gTTS("Ready", lang='en')
+                    st.success("✅ Voice Engine Ready")
+                except: st.error("❌ Voice Engine Fail")
                 s.update(label="Test Complete", state="complete")
 
 #--------------------
@@ -133,7 +131,6 @@ if st.session_state.is_admin:
 if st.session_state.is_admin:
     with st.sidebar:
         st.markdown("---")
-        # Moderation
         pending_df = df[df['status'] == 'pending'] if 'status' in df.columns else pd.DataFrame()
         if not pending_df.empty:
             st.warning(f"🔔 {len(pending_df)} New Requests")
@@ -144,7 +141,6 @@ if st.session_state.is_admin:
                         df.at[index, 'status'] = 'verified'
                         conn.update(data=df); st.rerun()
 
-        # Analytics
         if not df.empty and 'timestamp' in df.columns:
             st.markdown("### 📊 Growth")
             df['date'] = pd.to_datetime(df['timestamp']).dt.date
@@ -155,7 +151,6 @@ if st.session_state.is_admin:
 #--------------------
 with st.sidebar:
     st.markdown("---")
-    # Offline Sync
     if st.session_state.offline_buffer:
         st.warning(f"📦 {len(st.session_state.offline_buffer)} Offline Items")
         if st.session_state.is_admin and connection_status == "Online":
@@ -164,10 +159,8 @@ with st.sidebar:
                 updated_df = pd.concat([df, new_data], ignore_index=True)
                 conn.update(data=updated_df)
                 st.session_state.offline_buffer = []
-                st.success("Sync Complete!")
                 st.rerun()
 
-    # Backup Button
     if not df.empty:
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download Backup", csv, "BDL_Brain.csv", "text/csv")
@@ -176,7 +169,7 @@ with st.sidebar:
 # Section 8: Main UI Header & Message Display
 #--------------------
 st.title("🧠 BDL.AI - Master Brain")
-st.caption(f"Status: {connection_status} | v3.1")
+st.caption(f"Status: {connection_status} | v3.2")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -221,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
         
         if questions:
             best_match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-            if score >= 85:
+            if score >= conf_level:
                 response = valid_brain[valid_brain['question'] == best_match].iloc[0]['answer']
         
         if not response:
@@ -230,14 +223,33 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.last_question = prompt
 
 #--------------------
-# Section 12: Logic - Hebrew RTL & Audio Support
+# Section 12: Logic - Hebrew RTL
 #--------------------
+    hebrew_trans = ""
     if hebrew_mode and response and "Result:" not in response:
         try:
-            trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            response = f"{response}\n\n<div class='rtl-container'>🇮🇱 {trans}</div>"
+            hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
         except: pass
 
-    with st.chat_message("assistant"):
-        st.markdown(response, unsafe_allow_html=True)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+#--------------------
+# Section 13: Logic - Voice Engine & Output
+#--------------------
+    if response:
+        # Generate Text Output
+        display_text = response
+        if hebrew_trans:
+            display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
+        
+        with st.chat_message("assistant"):
+            st.markdown(display_text, unsafe_allow_html=True)
+            
+            # If voice is enabled, generate audio
+            if voice_mode:
+                try:
+                    tts = gTTS(response, lang='en')
+                    audio_fp = io.BytesIO()
+                    tts.write_to_fp(audio_fp)
+                    st.audio(audio_fp, format='audio/mp3')
+                except: st.warning("Voice unavailable.")
+        
+        st.session_state.messages.append({"role": "assistant", "content": display_text})
