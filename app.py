@@ -61,7 +61,7 @@ with st.sidebar:
     password_input = st.text_input("Admin Key", type="password")
     
     # Check if the correct key is entered (Default: admin123)
-    if password_input == "admin123":
+    if password_input == "BDL real":
         st.session_state.is_admin = True
         st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
         
@@ -187,3 +187,4 @@ if prompt := st.chat_input("Ask BDL..."):
     # Show BDL's response
     with st.chat_message("assistant"): st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
