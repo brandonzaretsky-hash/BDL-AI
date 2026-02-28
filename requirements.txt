@@ -3,3 +3,4 @@ pandas
 st-gsheets-connection
 thefuzz
 deep-translator
+gTTS
