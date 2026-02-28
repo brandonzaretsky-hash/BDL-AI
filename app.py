@@ -38,6 +38,16 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
+/* Custom Green Audio Buttons */
+    audio {
+        filter: sepia(100%) saturate(300%) hue-rotate(90deg) brightness(1.2);
+        height: 30px;
+        width: 100%;
+    }
+    .stAudio {
+        border-left: 5px solid #00ff00;
+        padding-left: 10px;
+    }
 
 #--------------------
 # Section 2: Global Variable & Session Initialization
@@ -155,6 +165,14 @@ if st.session_state.is_admin:
                     st.success("✅ Permissions: Master Admin")
 
                 s.update(label="All Systems Operational!", state="complete", expanded=False)
+                # Updated Stress Test for Dual Voice
+                st.write("Checking Dual Voice Engine...")
+                try:
+                    tts_en = gTTS("English Check", lang='en')
+                    tts_he = gTTS("שלום", lang='iw')
+                    st.success("✅ Dual Voice: English & Hebrew Ready")
+                except:
+                    st.error("❌ Voice Engine: Connection Blocked")
 #--------------------
 # Section 6: Sidebar - Moderation & Analytics
 #--------------------
@@ -264,10 +282,10 @@ if prompt := st.chat_input("Communicate..."):
         except: pass
 
 #--------------------
-# Section 13: Logic - Voice Engine & Output
+# Section 13: Logic - Dual Voice Engine & Output
 #--------------------
     if response:
-        # Generate Text Output
+        # Prepare the combined display text
         display_text = response
         if hebrew_trans:
             display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
@@ -275,15 +293,35 @@ if prompt := st.chat_input("Communicate..."):
         with st.chat_message("assistant"):
             st.markdown(display_text, unsafe_allow_html=True)
             
-            # If voice is enabled, generate audio
+            # --- VOICE ENGINE (ENGLISH & HEBREW) ---
             if voice_mode:
-                try:
-                    tts = gTTS(response, lang='en')
-                    audio_fp = io.BytesIO()
-                    tts.write_to_fp(audio_fp)
-                    st.audio(audio_fp, format='audio/mp3')
-                except: st.warning("Voice unavailable.")
-        
-        st.session_state.messages.append({"role": "assistant", "content": display_text})
+                col1, col2 = st.columns(2)
+                
+                # English Voice
+                with col1:
+                    try:
+                        tts_en = gTTS(response, lang='en')
+                        en_fp = io.BytesIO()
+                        tts_en.write_to_fp(en_fp)
+                        st.caption("🇺🇸 English Audio")
+                        st.audio(en_fp, format='audio/mp3')
+                    except:
+                        st.warning("English Voice Failed")
 
+                # Hebrew Voice (Feature 1)
+                if hebrew_mode and hebrew_trans:
+                    with col2:
+                        try:
+                            # We extract only the text, ignoring the HTML <div> tags
+                            clean_hebrew = GoogleTranslator(source='auto', target='iw').translate(response)
+                            tts_he = gTTS(clean_hebrew, lang='iw')
+                            he_fp = io.BytesIO()
+                            tts_he.write_to_fp(he_fp)
+                            st.caption("🇮🇱 Hebrew Audio")
+                            st.audio(he_fp, format='audio/mp3')
+                        except:
+                            st.warning("Hebrew Voice Failed")
+        
+        # Save to history
+        st.session_state.messages.append({"role": "assistant", "content": display_text})
 
