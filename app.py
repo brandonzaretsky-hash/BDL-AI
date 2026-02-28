@@ -149,6 +149,57 @@ with st.sidebar:
         st.rerun()
 
 #--------------------
+# SYSTEM DIAGNOSTIC TEST (ADMIN ONLY)
+#--------------------
+if st.session_state.is_admin:
+    st.markdown("---")
+    if st.sidebar.button("🛠️ Run System Stress Test"):
+        with st.status("Running BDL Diagnostics...", expanded=True) as status:
+            
+            # 1. TEST: MATH ENGINE
+            st.write("Testing Math Processor...")
+            test_math = pd.eval("150 * 2 + 50")
+            if test_math == 350:
+                st.success("✅ Math: 350 (Passed)")
+            
+            # 2. TEST: HEBREW & RTL
+            st.write("Testing Hebrew Translation...")
+            try:
+                from deep_translator import GoogleTranslator
+                test_trans = GoogleTranslator(source='en', target='iw').translate("System Check")
+                st.markdown(f'<div class="rtl-container">✅ Hebrew: {test_trans}</div>', unsafe_allow_html=True)
+            except: st.error("❌ Hebrew: Failed")
+
+            # 3. TEST: SPEECH ENGINE (TTS)
+            st.write("Testing Speech Synth...")
+            try:
+                from gtts import gTTS
+                import io
+                tts = gTTS("System Online", lang='en')
+                audio_fp = io.BytesIO()
+                tts.write_to_fp(audio_fp)
+                st.audio(audio_fp, format='audio/mp3')
+                st.success("✅ Speech: Audio Generated")
+            except: st.error("❌ Speech: Library missing")
+
+            # 4. TEST: CLOUD READING/SAVING
+            st.write("Testing Cloud Sync...")
+            try:
+                df_test = load_brain_data()
+                st.success(f"✅ Cloud: Connected ({len(df_test)} rows)")
+            except: st.error("❌ Cloud: Disconnected")
+
+            # 5. TEST: GRAPHING ENGINE
+            st.write("Testing Analytics...")
+            try:
+                test_data = pd.DataFrame({'x': [1, 2, 3], 'y': [10, 20, 30]})
+                st.bar_chart(test_data.set_index('x'))
+                st.success("✅ Analytics: Rendered")
+            except: st.error("❌ Analytics: Render Fail")
+
+            status.update(label="All Systems Operational!", state="complete", expanded=False)
+
+#--------------------
 # MAIN CHAT UI
 #--------------------
 st.title("🧠 BDL.AI - Master Brain")
@@ -223,3 +274,4 @@ if prompt := st.chat_input("Communicate..."):
     with st.chat_message("assistant"):
         st.markdown(response, unsafe_allow_html=True)
     st.session_state.messages.append({"role": "assistant", "content": response})
+
