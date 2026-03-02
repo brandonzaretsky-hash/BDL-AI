@@ -22,7 +22,18 @@ st.markdown("""
     .rtl-container {
         direction: rtl; text-align: right; background-color: #1f2937;
         padding: 12px; border-radius: 10px; margin-top: 10px;
-        color: #ffffff; border-right: 5px solid #00d4ff;
+        color: #ffffff; border-right: 5px solid #00ff00;
+    }
+
+    /* Fixed CSS for Green Audio Buttons */
+    audio {
+        filter: sepia(1) saturate(3) hue-rotate(90deg) brightness(1.2);
+        height: 30px;
+        width: 100%;
+    }
+    .stAudio {
+        border-left: 5px solid #00ff00;
+        padding-left: 10px;
     }
 
     .pulse-container { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #00ff00; margin-bottom: 20px; }
@@ -38,16 +49,6 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-/* Custom Green Audio Buttons */
-    audio {
-        filter: sepia(100%) saturate(300%) hue-rotate(90deg) brightness(1.2);
-        height: 30px;
-        width: 100%;
-    }
-    .stAudio {
-        border-left: 5px solid #00ff00;
-        padding-left: 10px;
-    }
 
 #--------------------
 # Section 2: Global Variable & Session Initialization
@@ -324,4 +325,5 @@ if prompt := st.chat_input("Communicate..."):
         
         # Save to history
         st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
