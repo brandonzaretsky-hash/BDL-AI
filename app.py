@@ -50,7 +50,8 @@ st.markdown("""
 # Section 2: Global Variable & Session Initialization
 #--------------------
 if "is_admin" not in st.session_state: st.session_state.is_admin = False
-if "is_speak_mode" not in st.session_state: st.session_state.is_speak_mode = False # NEW
+if "is_speak_mode" not in st.session_state: st.session_state.is_speak_mode = False
+if "slang_mode" not in st.session_state: st.session_state.slang_mode = False  # Add this!
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
 if "messages" not in st.session_state: st.session_state.messages = []
@@ -313,3 +314,4 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
