@@ -6,3 +6,4 @@ deep-translator
 gTTS
 googlesearch-python
 PyDictionary
+wikipedia-api
