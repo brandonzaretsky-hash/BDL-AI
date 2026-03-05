@@ -239,20 +239,50 @@ if prompt := st.chat_input("Communicate..."):
             if not exact_match_df.empty:
                 response = exact_match_df.iloc[-1]['answer']
 
-            # PHASE B: NEURAL SPEAK / SLANG SYNTHESIS
-            # Runs if exact match failed AND (Speak Mode is on OR Slang is on)
-            if not response and (st.session_state.get('is_speak_mode') or slang_mode):
+            # PHASE B: NEURAL SPEAK / INTERNET AUGMENTATION
+            if not response and st.session_state.get('is_speak_mode'):
+                from googlesearch import search
+                from PyDictionary import PyDictionary
+                dictionary = PyDictionary()
+                
+                input_tokens = prompt.lower().split()
                 stitched = []
-                grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
-                slang_list = ['no cap', 'fr', 'bet', 'rizz', 'sus', 'vibing', 'bussin', 'bruh']
                 
-                for word in input_tokens:
-                    word_match = current_df[current_df['question'].str.lower() == word]
-                    if not word_match.empty:
-                        stitched.append(str(word_match.iloc[-1]['answer']))
-                    elif word in grammar_bridges or (slang_mode and word in slang_list):
-                        stitched.append(word)
-                
+                with st.spinner("🔍 BDL is searching the web..."):
+                    for word in input_tokens:
+                        # 1. Check learned brain first (Your data is priority)
+                        word_match = current_df[current_df['question'].str.lower() == word]
+                        
+                        if not word_match.empty:
+                            stitched.append(str(word_match.iloc[-1]['answer']))
+                        
+                        # 2. Check Standard Grammar Bridges
+                        elif word in ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']:
+                            stitched.append(word)
+                        
+                        # 3. INTERNET UPGRADE: Dictionary Lookup
+                        else:
+                            try:
+                                # Look up the meaning if BDL doesn't know it
+                                meaning = dictionary.meaning(word)
+                                if meaning:
+                                    # Get the first definition found (Noun or Verb)
+                                    first_def = list(meaning.values())[0][0]
+                                    stitched.append(f"({first_def})")
+                                else:
+                                    stitched.append(word)
+                            except:
+                                stitched.append(word)
+
+                # 4. PROBLEM SOLVER: If the prompt is a question, do a quick Google Fact Check
+                if "?" in prompt or any(w in prompt.lower() for w in ['how', 'why', 'what', 'who']):
+                    try:
+                        search_results = list(search(prompt, num_results=1))
+                        if search_results:
+                            stitched.append(f"\n\n🌍 Source found: {search_results[0]}")
+                    except:
+                        pass
+
                 if stitched:
                     response = " ".join(stitched).capitalize() + "."
 
@@ -314,4 +344,5 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
