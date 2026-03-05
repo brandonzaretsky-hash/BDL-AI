@@ -7,3 +7,4 @@ gTTS
 googlesearch-python
 PyDictionary
 wikipedia-api
+wikipedia
