@@ -214,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - High-Capacity Knowledge Engine
+# Section 11: Logic - Uncapped Knowledge Engine
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -225,27 +225,34 @@ if prompt := st.chat_input("Communicate..."):
                 from googlesearch import search
                 wikipedia.set_lang("en")
                 
-                # Knowledge Caps (Adjust these to get more or less text!)
-                SENTENCE_LIMIT = 10
-                CHAR_LIMIT = 1000
+                # SETTINGS: Crank these up for long responses!
+                SENTENCE_LIMIT = 10 
+                CHAR_LIMIT = 3000  # Bumped from 1000 to 3000
 
                 with st.status("🌐 BDL is pulling deep data...", expanded=False) as status:
-                    # 1. Fact Search (Who/What/How)
                     query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', '?']
                     is_question = any(k in prompt.lower() for k in query_keywords)
                     
                     if is_question:
                         try:
                             wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
-                            # UPGRADED: Grabbing more sentences
-                            full_summary = wikipedia.summary(wiki_query, sentences=SENTENCE_LIMIT)
-                            response = full_summary[:CHAR_LIMIT] + "..." if len(full_summary) > CHAR_LIMIT else full_summary
-                        except:
+                            
+                            # STEP 1: Try getting a long summary
+                            full_text = wikipedia.summary(wiki_query, sentences=SENTENCE_LIMIT)
+                            
+                            # STEP 2: If the summary is still too short, grab the FULL PAGE CONTENT
+                            if len(full_text) < 500:
+                                page = wikipedia.page(wiki_query)
+                                full_text = page.content[:CHAR_LIMIT] # Take a huge slice of the article
+                            
+                            response = full_text
+                        except Exception as e:
+                            # Fallback to Google Search results if Wikipedia fails
                             search_results = list(search(prompt, num_results=1))
                             if search_results:
                                 response = f"I solved this using the web. See here: {search_results[0]}"
                     
-                    # 2. Memory Stitching with Deep Definitions
+                    # 2. Memory Stitching (Non-Questions)
                     if not response:
                         tokens = prompt.lower().split()
                         stitched = []
@@ -257,15 +264,16 @@ if prompt := st.chat_input("Communicate..."):
                                 stitched.append(word)
                             else:
                                 try:
-                                    # Deep lookup for unknown words
-                                    w_summary = wikipedia.summary(word, sentences=2)
-                                    stitched.append(f"({w_summary[:150]}...)")
+                                    # Definition lookup for unknown words
+                                    w_text = wikipedia.summary(word, sentences=2)
+                                    stitched.append(f"({w_text[:200]}...)")
                                 except:
                                     stitched.append(word)
                         
                         response = " ".join(stitched).capitalize()
                     
-                    status.update(label="Deep Knowledge Integrated!", state="complete")
+                    # Update status with info
+                    status.update(label=f"Knowledge Loaded! ({len(response)} chars)", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
@@ -295,6 +303,7 @@ if prompt := st.chat_input("Communicate..."):
                             st.audio(fp, format='audio/mp3')
                         except: st.warning("EN Voice Error")
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
 
