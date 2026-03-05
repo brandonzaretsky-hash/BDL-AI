@@ -189,149 +189,101 @@ for message in st.session_state.messages:
         st.markdown(message["content"], unsafe_allow_html=True)
 
 #--------------------
-# Section 9: Logic - Input & Main Engine
+# Section 9: Logic - Global Variables & Input
 #--------------------
 if prompt := st.chat_input("Communicate..."):
-    # Initialize variables at the very start so they ALWAYS exist
+    # Always initialize these so the app never crashes on 'hebrew_trans'
     response = ""
-    hebrew_trans = "" 
-    
-    # 1. Admin Command: Forget
+    hebrew_trans = ""
+    import wikipedia
+    from googlesearch import search
+    wikipedia.set_lang("en")
+
     if prompt.lower() == "forget that" and st.session_state.is_admin:
         if connection_status == "Online" and not df.empty:
             conn.update(data=df.drop(df.tail(1).index))
             response = "🗑️ Memory Wiped."
-        else:
-            response = "Cannot forget right now."
+        else: response = "Cannot forget right now."
     else:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
-        # 2. Math Check
+        # Math Logic
         if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-            try:
-                response = f"🔢 **Result:** {pd.eval(prompt)}"
-            except:
-                pass
-
-        # 3. Learning Mode Logic
-        if not response and st.session_state.waiting_for_answer:
-            lesson = {
-                "question": st.session_state.last_question.lower(),
-                "answer": prompt,
-                "status": "verified" if st.session_state.is_admin else "pending",
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            st.session_state.offline_buffer.append(lesson)
-            response = "✅ Learned. (Awaiting Review)"
-            st.session_state.waiting_for_answer = False
+            try: response = f"🔢 **Result:** {pd.eval(prompt)}"
+            except: pass
 
 #--------------------
-# Section 11: Logic - The Knowledge Engine
+# Section 11: Logic - The Echo-Breaker (Neural Brain)
 #--------------------
-        elif not response:
+        if not response:
             current_df = load_fresh_data()
             
             # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
-                from googlesearch import search
-                
-                with st.status("🚀 BDL is fetching real data...", expanded=False) as status:
-                    # 1. Check if it's a specific question (Who/What/How)
-                    query_words = ['how', 'why', 'what', 'who', 'where', 'is', 'solve']
-                    if any(qw in prompt.lower() for qw in query_words):
+                with st.spinner("🌐 BDL is accessing the Knowledge Bridge..."):
+                    # 1. Fact Search (If it's a question)
+                    query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', '?']
+                    if any(k in prompt.lower() for k in query_keywords):
                         try:
-                            # Search Wikipedia first for a solid answer
-                            page = wiki.page(prompt.replace("what is", "").replace("who is", "").strip())
-                            if page.exists():
-                                response = f"Knowledge found: {page.summary[:300]}..."
-                            else:
-                                # Fallback to Google Search results
-                                results = list(search(prompt, stop=1))
-                                if results:
-                                    response = f"I solved this using the web. See here: {results[0]}"
+                            # Try Wikipedia Summary first
+                            wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
+                            response = wikipedia.summary(wiki_query, sentences=1)
                         except:
-                            pass
+                            # Fallback to Google Search
+                            res = list(search(prompt, stop=1))
+                            if res: response = f"I found a solution on the web: {res[0]}"
 
-                    # 2. If it's still repeating/unknown, pull definitions for EVERY unknown word
+                    # 2. Memory Stitching (If not a direct question)
                     if not response:
-                        input_tokens = prompt.lower().split()
+                        tokens = prompt.lower().split()
                         stitched = []
-                        for word in input_tokens:
-                            word_match = current_df[current_df['question'].str.lower() == word]
-                            if not word_match.empty:
-                                stitched.append(str(word_match.iloc[-1]['answer']))
-                            elif word in ['the', 'and', 'with', 'is', 'of']:
+                        for word in tokens:
+                            match = current_df[current_df['question'].str.lower() == word]
+                            if not match.empty:
+                                stitched.append(str(match.iloc[-1]['answer']))
+                            elif word in ['the', 'is', 'and', 'with', 'my']:
                                 stitched.append(word)
                             else:
-                                # INTERNET FALLBACK: Get a 1-sentence definition
+                                # Dictionary Lookup for unknown words
                                 try:
-                                    w_page = wiki.page(word)
-                                    if w_page.exists():
-                                        stitched.append(f"({w_page.summary[:50]}...)")
-                                    else:
-                                        stitched.append(word)
+                                    summary = wikipedia.summary(word, sentences=1)
+                                    stitched.append(f"({summary[:50]}...)")
                                 except:
-                                    stitched.append(word)
-                        
+                                    stitched.append(f"[{word}]") # Marker for unknown
                         response = " ".join(stitched).capitalize()
-                status.update(label="Knowledge Integrated!", state="complete")
 
-            # --- CASE B: STANDARD USER MODE ---
+            # --- CASE B: STANDARD MODE ---
             else:
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
-                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                    m, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
                     if score >= 90:
-                        response = current_df[current_df['question'] == match].iloc[-1]['answer']
+                        response = current_df[current_df['question'] == m].iloc[-1]['answer']
+
+            if not response:
+                response = "I haven't learned that yet. **What is the answer?**"
+                st.session_state.waiting_for_answer = True
+                st.session_state.last_question = prompt
 
 #--------------------
-# Section 12: Logic - Hebrew Processing
+# Section 12 & 13: Processing & Final Voice Output
 #--------------------
-        # This now safely checks variables initialized in Section 9
         if hebrew_mode and response and "Result:" not in response:
-            try:
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            except:
-                pass
+            try: hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
+            except: pass
 
-#--------------------
-# Section 13: Logic - Voice Engine & Output
-#--------------------
         if response:
             display_text = response
-            if hebrew_trans:
-                display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
-            
+            if hebrew_trans: display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
             with st.chat_message("assistant"):
                 st.markdown(display_text, unsafe_allow_html=True)
-                
                 if voice_mode:
-                    v_col1, v_col2 = st.columns(2)
-                    with v_col1:
+                    v1, v2 = st.columns(2)
+                    with v1:
                         try:
-                            tts_en = gTTS(response, lang='en')
-                            en_fp = io.BytesIO()
-                            tts_en.write_to_fp(en_fp)
-                            st.audio(en_fp, format='audio/mp3')
-                        except:
-                            st.warning("EN Voice Error")
-                    
-                    if hebrew_mode and hebrew_trans:
-                        with v_col2:
-                            try:
-                                clean_he = re.sub('<[^<]+?>', '', hebrew_trans).replace('🇮🇱', '').strip()
-                                tts_he = gTTS(clean_he, lang='iw')
-                                he_fp = io.BytesIO()
-                                tts_he.write_to_fp(he_fp)
-                                st.audio(he_fp, format='audio/mp3')
-                            except:
-                                st.warning("HE Voice Error")
-
+                            t_en = gTTS(response, lang='en')
+                            fp = io.BytesIO(); t_en.write_to_fp(fp)
+                            st.audio(fp, format='audio/mp3')
+                        except: st.warning("EN Voice Error")
             st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-
-
-
-
