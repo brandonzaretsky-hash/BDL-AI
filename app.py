@@ -50,11 +50,11 @@ st.markdown("""
 # Section 2: Global Variable & Session Initialization
 #--------------------
 if "is_admin" not in st.session_state: st.session_state.is_admin = False
+if "is_speak_mode" not in st.session_state: st.session_state.is_speak_mode = False # NEW
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
 if "messages" not in st.session_state: st.session_state.messages = []
 if "offline_buffer" not in st.session_state: st.session_state.offline_buffer = []
-
 #--------------------
 # Section 3: Database Connection & Data Loading
 #--------------------
@@ -77,13 +77,18 @@ with st.sidebar:
     st.title("🔐 Master Control")
     admin_input = st.text_input("Admin Key", type="password")
     
-    # Mode Detection
-    is_speak_mode = admin_input.lower().startswith("speak ")
-    st.session_state.is_admin = (admin_input == "admin123")
-
-    if is_speak_mode:
-        st.warning("🕵️ Speak Mode: Neural Grammar Active")
-        target_keys = admin_input[6:].strip().split()
+    # THE TOGGLE SWITCH
+    if admin_input.lower().strip() == "speak":
+        st.session_state.is_speak_mode = True
+        st.warning("🕵️ Neural Speak Mode: ON")
+        st.caption("All chat input will now be synthesized.")
+    elif admin_input == "admin123":
+        st.session_state.is_admin = True
+        st.session_state.is_speak_mode = False # Turn off speak if logging into Admin
+        st.success("Admin Dashboard Active")
+    else:
+        st.session_state.is_admin = False
+        st.session_state.is_speak_mode = False
         
         stitched_parts = []
         if not df.empty:
@@ -239,18 +244,41 @@ if prompt := st.chat_input("Communicate..."):
 #--------------------
 # Section 11: Logic - Standard Retrieval
 #--------------------
-        elif not response:
+elif not response:
             current_df = load_fresh_data()
-            questions = current_df['question'].fillna('').tolist()
-            if questions:
-                match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                if score >= conf_level:
-                    response = current_df[current_df['question'] == match].iloc[0]['answer']
             
+            # --- IF SPEAK MODE IS ON: USE GENERATIVE BRAIN ---
+            if st.session_state.get('is_speak_mode'):
+                input_keywords = prompt.lower().split()
+                stitched_parts = []
+                
+                for word in input_keywords:
+                    # Find any row containing this word
+                    matches = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
+                    if not matches.empty:
+                        # Grab a random learned fragment
+                        fragment = matches.sample(n=1).iloc[0]['answer']
+                        stitched_parts.append(str(fragment))
+                    else:
+                        # Grammar Bridge: Keep small words for flow
+                        if len(word) <= 3: stitched_parts.append(word)
+
+                if stitched_parts:
+                    response = " ".join(stitched_parts).capitalize() + "."
+            
+            # --- IF SPEAK MODE IS OFF: USE LITERAL BRAIN ---
+            else:
+                questions = current_df['question'].fillna('').tolist()
+                if questions:
+                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                    if score >= conf_level:
+                        response = current_df[current_df['question'] == match].iloc[0]['answer']
+
+            # FALLBACK: If both brains fail
             if not response:
-                response = "I haven't learned that yet. **What is the answer?**"
+                response = "I haven't learned those patterns yet. **Teach me?**"
                 st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt
+                st.session_state.last_question = prompt = prompt
 
 #--------------------
 # Section 12: Logic - Hebrew RTL
@@ -289,3 +317,4 @@ if prompt := st.chat_input("Communicate..."):
                         except: st.warning("HE Voice Error")
 
         st.session_state.messages.append({"role": "assistant", "content": display_text})
+
