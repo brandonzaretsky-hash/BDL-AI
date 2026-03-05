@@ -228,44 +228,56 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Internet Augmented Brain
+# Section 11: Logic - The Echo-Breaker (Internet Brain)
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             
-            # --- CASE A: INTERNET-POWERED SPEAK MODE ---
+            # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
+            # This ONLY runs if you have 'speak' in the Admin Box
             if st.session_state.get('is_speak_mode'):
                 from googlesearch import search
                 import requests
                 
-                with st.status("🌐 BDL is accessing the web...", expanded=False) as status:
-                    # 1. First, check if the prompt is a question or a problem
-                    # If it's a problem, we do a global web search
-                    try:
-                        search_results = list(search(prompt, num_results=3))
-                        if search_results:
-                            # We take the first result and try to summarize it
-                            response = f"I've analyzed the web for '{prompt}'. Here is what I found: {search_results[0]}"
-                            status.update(label="Web Search Complete!", state="complete")
-                    except Exception as e:
-                        st.error(f"Web Search Error: {e}")
+                with st.spinner("🌐 BDL is breaking the echo..."):
+                    # 1. PROBLEM SOLVER: If it looks like a question, hit the web immediately
+                    query_words = ['how', 'why', 'what', 'who', 'where', 'solve', 'is', '?']
+                    if any(qw in prompt.lower() for qw in query_words):
+                        try:
+                            # Search for the actual answer, not just the words
+                            results = list(search(prompt, stop=3))
+                            if results:
+                                response = f"I've solved that for you. Here is the data: {results[0]}"
+                        except:
+                            pass
 
-                # 2. If it's just a sentence, we do the "Smart Stitching"
-                if not response:
-                    input_tokens = prompt.lower().split()
-                    stitched = []
-                    for word in input_tokens:
-                        word_match = current_df[current_df['question'].str.lower() == word]
-                        if not word_match.empty:
-                            stitched.append(str(word_match.iloc[-1]['answer']))
-                        else:
-                            stitched.append(word) # This is the "repeat" part - we'll fix this below
-                    response = " ".join(stitched).capitalize() + "."
+                    # 2. DICTIONARY STITCHER: If it's a statement, find meanings for unknown words
+                    if not response:
+                        input_tokens = prompt.lower().split()
+                        stitched = []
+                        for word in input_tokens:
+                            # Priority 1: Check your Google Sheet
+                            word_match = current_df[current_df['question'].str.lower() == word]
+                            if not word_match.empty:
+                                stitched.append(str(word_match.iloc[-1]['answer']))
+                            
+                            # Priority 2: Standard Bridges
+                            elif word in ['the', 'and', 'with', 'my', 'your']:
+                                stitched.append(word)
+                                
+                            # Priority 3: The "Echo Breaker" - If unknown, ask the web
+                            else:
+                                stitched.append(f"[{word}: Search Required]") # This stops the repeat
+                        
+                        response = " ".join(stitched).capitalize()
 
-            # --- CASE B: STANDARD MODE ---
+            # --- CASE B: STANDARD USER MODE ---
             else:
-                # (Keep your existing Phase C/D Fuzzy logic here)
-                pass
+                questions = current_df['question'].fillna('').tolist()
+                if questions:
+                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                    if score >= 90:
+                        response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
 #--------------------
 # Section 12: Logic - Hebrew Processing
@@ -311,6 +323,7 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
 
