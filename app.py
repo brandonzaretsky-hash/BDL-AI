@@ -213,47 +213,44 @@ if prompt := st.chat_input("Communicate..."):
             try: response = f"🔢 **Result:** {pd.eval(prompt)}"
             except: pass
 
-##--------------------
-# Section 11: Logic - Infinite Knowledge Brain
+#--------------------
+# Section 11: Logic - Deep Scan Knowledge Engine
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             
             # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
-                import wikipedia
-                from googlesearch import search
-                # Force Wikipedia to ignore its "auto-suggest" which often cuts text short
-                wikipedia.set_lang("en")
+                import wikipediaapi
+                # We identify as your BDL bot to Wikipedia
+                wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
                 
-                # SETTINGS: Crank these up for massive responses!
-                CHAR_LIMIT = 5000  # Increased to 5000 letters
-                
-                with st.status("🌐 BDL is deep-scanning the web...", expanded=False) as status:
+                # LIMIT: Set this to 5000 for a massive response!
+                CHAR_LIMIT = 5000 
+
+                with st.status("🚀 BDL is performing a Deep Scan...", expanded=False) as status:
                     query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', '?']
                     is_question = any(k in prompt.lower() for k in query_keywords)
                     
                     if is_question:
-                        try:
-                            # Clean the prompt for Wikipedia
-                            wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
-                            
-                            # STEP 1: Search for the exact page first
-                            search_results = wikipedia.search(wiki_query)
-                            if search_results:
-                                # STEP 2: Pull the FULL CONTENT of the first result
-                                page = wikipedia.page(search_results[0], auto_suggest=False)
-                                # We take the first 5000 characters of the ACTUAL article body
-                                full_info = page.content
-                                response = full_info[:CHAR_LIMIT] + "\n\n[End of Data Stream]"
+                        # Clean the prompt
+                        wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
+                        page = wiki_link.page(wiki_query)
+                        
+                        if page.exists():
+                            # WE GRAB THE FULL TEXT HERE (Intro + All Sections)
+                            full_text = page.text 
+                            if len(full_text) > 100:
+                                response = full_text[:CHAR_LIMIT] + "\n\n[End of Deep Scan]"
                             else:
-                                response = "I searched the globe but found no records of that."
-                        except Exception as e:
-                            # Fallback if Wikipedia is blocked or error
+                                response = "The file is too small to summarize."
+                        else:
+                            # Search Fallback
+                            from googlesearch import search
                             res = list(search(prompt, num_results=1))
-                            response = f"I found a web link for you: {res[0]}" if res else "Brain error."
+                            response = f"I found a web link for you: {res[0]}" if res else "No records found."
                     
-                    # 2. Memory Stitching (Non-Questions)
+                    # 2. Memory Stitching (If not a question)
                     if not response:
                         tokens = prompt.lower().split()
                         stitched = []
@@ -261,17 +258,18 @@ if prompt := st.chat_input("Communicate..."):
                             match = current_df[current_df['question'].str.lower() == word]
                             if not match.empty:
                                 stitched.append(str(match.iloc[-1]['answer']))
-                            elif word in ['is', 'the', 'and', 'with', 'my', 'of', 'in']:
+                            elif word in ['is', 'the', 'and', 'with', 'of', 'in']:
                                 stitched.append(word)
                             else:
                                 # Quick lookup for unknown single words
-                                try:
-                                    stitched.append(f"({wikipedia.summary(word, sentences=1)[:100]}...)")
-                                except:
+                                w_page = wiki_link.page(word)
+                                if w_page.exists():
+                                    stitched.append(f"({w_page.summary[:100]}...)")
+                                else:
                                     stitched.append(word)
                         response = " ".join(stitched).capitalize()
 
-                    status.update(label=f"Data Retrieved: {len(response)} characters", state="complete")
+                    status.update(label=f"Scan Complete: {len(response)} characters found", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
@@ -301,6 +299,7 @@ if prompt := st.chat_input("Communicate..."):
                             st.audio(fp, format='audio/mp3')
                         except: st.warning("EN Voice Error")
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
 
