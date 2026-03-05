@@ -191,26 +191,28 @@ for message in st.session_state.messages:
 # Section 9: Logic - Input & Calculator
 #--------------------
 if prompt := st.chat_input("Communicate..."):
-    # Special Admin Command
+    # Special Admin Command: Forget
     if prompt.lower() == "forget that" and st.session_state.is_admin:
         if connection_status == "Online" and not df.empty:
             conn.update(data=df.drop(df.tail(1).index))
             response = "🗑️ Memory Wiped."
-        else: response = "Cannot forget right now."
+        else:
+            response = "Cannot forget right now."
     else:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
         response = ""
         # Math Check
         if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-            try: 
+            try:
                 response = f"🔢 **Result:** {pd.eval(prompt)}"
-            except: 
+            except:
                 pass
 
 #--------------------
-# Section 10: Logic - Learning
+# Section 10: Logic - Learning Mode
 #--------------------
         if not response and st.session_state.waiting_for_answer:
             lesson = {
@@ -223,7 +225,10 @@ if prompt := st.chat_input("Communicate..."):
             response = "✅ Learned. (Awaiting Review)"
             st.session_state.waiting_for_answer = False
 
-elif not response:
+#--------------------
+# Section 11: Logic - Unified Grammar, Slang, & Neural Brain
+#--------------------
+        elif not response:
             current_df = load_fresh_data()
             input_tokens = prompt.lower().split()
             
@@ -235,13 +240,14 @@ elif not response:
                     response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
             # --- PHASE 2: GLOBAL GRAMMAR & SLANG SYNTHESIS ---
+            # Triggered if no exact match OR if Speak Mode is active
             if not response or st.session_state.get('is_speak_mode'):
                 stitched = []
                 
                 # Standard Connectors
                 grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
                 
-                # Slang Connectors (Only active if toggle is on)
+                # Slang Connectors (Active if toggle is on)
                 slang_list = ['no cap', 'fr', 'bet', 'rizz', 'sus', 'vibing', 'bussin', 'bruh']
                 
                 for word in input_tokens:
@@ -255,8 +261,8 @@ elif not response:
                     elif word in grammar_bridges:
                         stitched.append(word)
                     
-                    # 3. Check Slang (If enabled)
-                    elif slang_mode and word in slang_list:
+                    # 3. Check Slang (If enabled via the toggle)
+                    elif 'slang_mode' in globals() and slang_mode and word in slang_list:
                         stitched.append(word)
                         
                     else:
@@ -277,17 +283,24 @@ elif not response:
                         response = gen_response[0].upper() + gen_response[1:]
                         if not response.endswith(('.', '!', '?')): response += "."
 
-#--------------------
-# Section 12: Logic - Hebrew Translation (Stays Global)
-#--------------------
-        hebrew_trans = ""
-        if hebrew_mode and response and "Result:" not in response:
-            try:
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            except: pass
+            # FALLBACK
+            if not response:
+                response = "I haven't learned those patterns. **What is the answer?**"
+                st.session_state.waiting_for_answer = True
+                st.session_state.last_question = prompt
 
 #--------------------
-# Section 13: Logic - Voice Engine & Output
+# Section 12: Logic - Hebrew & Global Processing
+#--------------------
+        hebrew_trans = ""
+        if 'hebrew_mode' in globals() and hebrew_mode and response and "Result:" not in response:
+            try:
+                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
+            except:
+                pass
+
+#--------------------
+# Section 13: Logic - Voice Engine & Final Output
 #--------------------
         if response:
             display_text = response
@@ -296,7 +309,7 @@ elif not response:
             
             with st.chat_message("assistant"):
                 st.markdown(display_text, unsafe_allow_html=True)
-                if voice_mode:
+                if 'voice_mode' in globals() and voice_mode:
                     v_col1, v_col2 = st.columns(2)
                     with v_col1:
                         try:
@@ -304,18 +317,17 @@ elif not response:
                             en_fp = io.BytesIO()
                             tts_en.write_to_fp(en_fp)
                             st.audio(en_fp, format='audio/mp3')
-                        except: st.warning("EN Voice Error")
+                        except:
+                            st.warning("EN Voice Error")
                     if hebrew_mode and hebrew_trans:
                         with v_col2:
                             try:
-                                # Clean translation for TTS
                                 clean_he = re.sub('<[^<]+?>', '', hebrew_trans).replace('🇮🇱', '').strip()
                                 tts_he = gTTS(clean_he, lang='iw')
                                 he_fp = io.BytesIO()
                                 tts_he.write_to_fp(he_fp)
                                 st.audio(he_fp, format='audio/mp3')
-                            except: st.warning("HE Voice Error")
+                            except:
+                                st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-
