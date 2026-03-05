@@ -106,10 +106,13 @@ with st.sidebar:
     st.markdown("---")
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
+    slang_mode = st.toggle("🧢 Slang Grammar Mode") # New Toggle
     
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
+    
+   
 #--------------------
 # Section 5: Sidebar - Maintenance & Diagnostics
 #--------------------
@@ -220,10 +223,7 @@ if prompt := st.chat_input("Communicate..."):
             response = "✅ Learned. (Awaiting Review)"
             st.session_state.waiting_for_answer = False
 
-#--------------------
-# Section 11: Logic - Unified Grammar & Slang Brain
-#--------------------
-        elif not response:
+elif not response:
             current_df = load_fresh_data()
             input_tokens = prompt.lower().split()
             
@@ -234,39 +234,33 @@ if prompt := st.chat_input("Communicate..."):
                 if score >= conf_level:
                     response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
-            # --- PHASE 2: SLANG & GRAMMAR SYNTHESIS ---
+            # --- PHASE 2: GLOBAL GRAMMAR & SLANG SYNTHESIS ---
             if not response or st.session_state.get('is_speak_mode'):
                 stitched = []
                 
-                # Standard Grammar Bridges
+                # Standard Connectors
                 grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
                 
-                # YOUR SLANG DICTIONARY: BDL treats these as "Grammar Connectors"
-                slang_grammar = {
-                    'no cap': 'honestly',
-                    'bet': 'agreed',
-                    'rizz': 'charisma',
-                    'sus': 'suspicious',
-                    'fr': 'for real',
-                    'vibing': 'relaxing'
-                }
+                # Slang Connectors (Only active if toggle is on)
+                slang_list = ['no cap', 'fr', 'bet', 'rizz', 'sus', 'vibing', 'bussin', 'bruh']
                 
                 for word in input_tokens:
-                    # 1. Check for Slang first
-                    if word in slang_grammar:
-                        stitched.append(word) # Keep the slang word for the vibe
+                    # 1. Check learned brain
+                    exact_match = current_df[current_df['question'].str.lower() == word]
                     
-                    # 2. Check for exact word definition in the brain
-                    elif not current_df[current_df['question'].str.lower() == word].empty:
-                        exact_match = current_df[current_df['question'].str.lower() == word]
+                    if not exact_match.empty:
                         stitched.append(str(exact_match.iloc[-1]['answer']))
                     
-                    # 3. Check for Standard Grammar
+                    # 2. Check Standard Grammar
                     elif word in grammar_bridges:
+                        stitched.append(word)
+                    
+                    # 3. Check Slang (If enabled)
+                    elif slang_mode and word in slang_list:
                         stitched.append(word)
                         
                     else:
-                        # Final fuzzy search for individual word
+                        # Fuzzy search for individual word
                         fuzzy_w = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
                         if not fuzzy_w.empty:
                             stitched.append(str(fuzzy_w.iloc[0]['answer']))
@@ -323,4 +317,5 @@ if prompt := st.chat_input("Communicate..."):
                             except: st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
