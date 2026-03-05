@@ -214,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - Internet-Powered Knowledge Engine
+# Section 11: Logic - High-Capacity Knowledge Engine
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -225,48 +225,47 @@ if prompt := st.chat_input("Communicate..."):
                 from googlesearch import search
                 wikipedia.set_lang("en")
                 
-                with st.status("🌐 BDL is accessing the Knowledge Bridge...", expanded=False) as status:
-                    # 1. Check if it's a specific question (Who/What/How/?)
+                # Knowledge Caps (Adjust these to get more or less text!)
+                SENTENCE_LIMIT = 5 
+                CHAR_LIMIT = 1000
+
+                with st.status("🌐 BDL is pulling deep data...", expanded=False) as status:
+                    # 1. Fact Search (Who/What/How)
                     query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', '?']
                     is_question = any(k in prompt.lower() for k in query_keywords)
                     
                     if is_question:
                         try:
-                            # Try Wikipedia first for a solid summary
                             wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
-                            response = wikipedia.summary(wiki_query, sentences=1)
+                            # UPGRADED: Grabbing more sentences
+                            full_summary = wikipedia.summary(wiki_query, sentences=SENTENCE_LIMIT)
+                            response = full_summary[:CHAR_LIMIT] + "..." if len(full_summary) > CHAR_LIMIT else full_summary
                         except:
-                            # Fallback to Google Search
                             search_results = list(search(prompt, num_results=1))
                             if search_results:
                                 response = f"I solved this using the web. See here: {search_results[0]}"
                     
-                    # 2. If it's a statement, we swap known words and look up unknown ones
+                    # 2. Memory Stitching with Deep Definitions
                     if not response:
                         tokens = prompt.lower().split()
                         stitched = []
                         for word in tokens:
-                            # Priority 1: Your Google Sheet
                             match = current_df[current_df['question'].str.lower() == word]
                             if not match.empty:
                                 stitched.append(str(match.iloc[-1]['answer']))
-                            
-                            # Priority 2: Standard Bridges
-                            elif word in ['is', 'the', 'and', 'with', 'my', 'your', 'of', 'in']:
+                            elif word in ['is', 'the', 'and', 'with', 'my', 'of', 'in']:
                                 stitched.append(word)
-                            
-                            # Priority 3: The "Anti-Echo" Internet Definition
                             else:
                                 try:
-                                    # Look up only the first sentence of the definition
-                                    def_summary = wikipedia.summary(word, sentences=1)
-                                    stitched.append(f"({def_summary[:60]}...)")
+                                    # Deep lookup for unknown words
+                                    w_summary = wikipedia.summary(word, sentences=2)
+                                    stitched.append(f"({w_summary[:150]}...)")
                                 except:
-                                    stitched.append(f"[{word}]") # Marker if word is truly unknown
+                                    stitched.append(word)
                         
                         response = " ".join(stitched).capitalize()
                     
-                    status.update(label="Knowledge Integrated!", state="complete")
+                    status.update(label="Deep Knowledge Integrated!", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
@@ -275,12 +274,6 @@ if prompt := st.chat_input("Communicate..."):
                     match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
                     if score >= 90:
                         response = current_df[current_df['question'] == match].iloc[-1]['answer']
-
-            # --- FINAL FALLBACK ---
-            if not response:
-                response = "I haven't learned that yet. **What is the answer?**"
-                st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt
 #--------------------
 # Section 12 & 13: Processing & Final Voice Output
 #--------------------
@@ -302,4 +295,5 @@ if prompt := st.chat_input("Communicate..."):
                             st.audio(fp, format='audio/mp3')
                         except: st.warning("EN Voice Error")
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
