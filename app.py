@@ -226,7 +226,7 @@ if prompt := st.chat_input("Communicate..."):
                 wikipedia.set_lang("en")
                 
                 # Knowledge Caps (Adjust these to get more or less text!)
-                SENTENCE_LIMIT = 5 
+                SENTENCE_LIMIT = 10
                 CHAR_LIMIT = 1000
 
                 with st.status("🌐 BDL is pulling deep data...", expanded=False) as status:
@@ -295,5 +295,6 @@ if prompt := st.chat_input("Communicate..."):
                             st.audio(fp, format='audio/mp3')
                         except: st.warning("EN Voice Error")
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
