@@ -188,10 +188,14 @@ for message in st.session_state.messages:
         st.markdown(message["content"], unsafe_allow_html=True)
 
 #--------------------
-# Section 9: Logic - Input & Calculator
+# Section 9: Logic - Input & Main Engine
 #--------------------
 if prompt := st.chat_input("Communicate..."):
-    # Special Admin Command: Forget
+    # Initialize variables at the very start so they ALWAYS exist
+    response = ""
+    hebrew_trans = "" 
+    
+    # 1. Admin Command: Forget
     if prompt.lower() == "forget that" and st.session_state.is_admin:
         if connection_status == "Online" and not df.empty:
             conn.update(data=df.drop(df.tail(1).index))
@@ -203,17 +207,14 @@ if prompt := st.chat_input("Communicate..."):
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        response = ""
-        # Math Check
+        # 2. Math Check
         if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
             try:
                 response = f"🔢 **Result:** {pd.eval(prompt)}"
             except:
                 pass
 
-#--------------------
-# Section 10: Logic - Learning Mode
-#--------------------
+        # 3. Learning Mode Logic
         if not response and st.session_state.waiting_for_answer:
             lesson = {
                 "question": st.session_state.last_question.lower(),
@@ -226,26 +227,25 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Precision Brain
+# Section 11: Logic - Unified Grammar, Slang, & Neural Brain
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             input_tokens = prompt.lower().split()
             
-            # --- PHASE 1: EXACT MATCH (No guessing!) ---
-            # This prevents BDL from dumping huge lists for simple words like "Hello"
+            # PHASE A: EXACT MATCH (Highest Priority)
             exact_match_df = current_df[current_df['question'].str.lower() == prompt.lower()]
             if not exact_match_df.empty:
                 response = exact_match_df.iloc[-1]['answer']
 
-            # --- PHASE 2: NEURAL SPEAK / SLANG SYNTHESIS ---
+            # PHASE B: NEURAL SPEAK / SLANG SYNTHESIS
+            # Runs if exact match failed AND (Speak Mode is on OR Slang is on)
             if not response and (st.session_state.get('is_speak_mode') or slang_mode):
                 stitched = []
                 grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
                 slang_list = ['no cap', 'fr', 'bet', 'rizz', 'sus', 'vibing', 'bussin', 'bruh']
                 
                 for word in input_tokens:
-                    # Look for single-word definitions
                     word_match = current_df[current_df['question'].str.lower() == word]
                     if not word_match.empty:
                         stitched.append(str(word_match.iloc[-1]['answer']))
@@ -255,23 +255,32 @@ if prompt := st.chat_input("Communicate..."):
                 if stitched:
                     response = " ".join(stitched).capitalize() + "."
 
-            # --- PHASE 3: FUZZY FALLBACK (Only if Phase 1 & 2 fail) ---
+            # PHASE C: FUZZY MATCH (Precision strictness)
             if not response:
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
                     match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                    # We increased the strictness to 90 so it doesn't "guess" wrong
                     if score >= 90:
                         response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
-            # FALLBACK
+            # PHASE D: FINAL FALLBACK
             if not response:
-                response = "I haven't learned that pattern yet. **What is the answer?**"
+                response = "I haven't learned that pattern. **What's the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
 
 #--------------------
-# Section 13: Logic - Voice Engine & Final Output
+# Section 12: Logic - Hebrew Processing
+#--------------------
+        # This now safely checks variables initialized in Section 9
+        if hebrew_mode and response and "Result:" not in response:
+            try:
+                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
+            except:
+                pass
+
+#--------------------
+# Section 13: Logic - Voice Engine & Output
 #--------------------
         if response:
             display_text = response
@@ -280,7 +289,8 @@ if prompt := st.chat_input("Communicate..."):
             
             with st.chat_message("assistant"):
                 st.markdown(display_text, unsafe_allow_html=True)
-                if 'voice_mode' in globals() and voice_mode:
+                
+                if voice_mode:
                     v_col1, v_col2 = st.columns(2)
                     with v_col1:
                         try:
@@ -290,6 +300,7 @@ if prompt := st.chat_input("Communicate..."):
                             st.audio(en_fp, format='audio/mp3')
                         except:
                             st.warning("EN Voice Error")
+                    
                     if hebrew_mode and hebrew_trans:
                         with v_col2:
                             try:
@@ -302,4 +313,3 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
-
