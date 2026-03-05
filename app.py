@@ -221,7 +221,7 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Unified Grammar Brain
+# Section 11: Logic - Unified Grammar & Slang Brain
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -234,21 +234,37 @@ if prompt := st.chat_input("Communicate..."):
                 if score >= conf_level:
                     response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
-            # --- PHASE 2: GRAMMAR SYNTHESIS (Generative Brain) ---
-            # If no exact answer, or if in Speak Mode, we build the sentence
+            # --- PHASE 2: SLANG & GRAMMAR SYNTHESIS ---
             if not response or st.session_state.get('is_speak_mode'):
                 stitched = []
-                # Common bridge words to keep for grammar
+                
+                # Standard Grammar Bridges
                 grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
                 
+                # YOUR SLANG DICTIONARY: BDL treats these as "Grammar Connectors"
+                slang_grammar = {
+                    'no cap': 'honestly',
+                    'bet': 'agreed',
+                    'rizz': 'charisma',
+                    'sus': 'suspicious',
+                    'fr': 'for real',
+                    'vibing': 'relaxing'
+                }
+                
                 for word in input_tokens:
-                    # Look for exact word definition in the brain
-                    exact_match = current_df[current_df['question'].str.lower() == word]
+                    # 1. Check for Slang first
+                    if word in slang_grammar:
+                        stitched.append(word) # Keep the slang word for the vibe
                     
-                    if not exact_match.empty:
+                    # 2. Check for exact word definition in the brain
+                    elif not current_df[current_df['question'].str.lower() == word].empty:
+                        exact_match = current_df[current_df['question'].str.lower() == word]
                         stitched.append(str(exact_match.iloc[-1]['answer']))
+                    
+                    # 3. Check for Standard Grammar
                     elif word in grammar_bridges:
                         stitched.append(word)
+                        
                     else:
                         # Final fuzzy search for individual word
                         fuzzy_w = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
@@ -256,23 +272,16 @@ if prompt := st.chat_input("Communicate..."):
                             stitched.append(str(fuzzy_w.iloc[0]['answer']))
 
                 if stitched:
-                    # Deduplicate (e.g., prevent "is is")
+                    # Deduplicate and Clean
                     clean_sent = []
                     for i, w in enumerate(stitched):
                         if i == 0 or w != stitched[i-1]:
                             clean_sent.append(w)
                     
-                    # Construct Final Sentence
                     gen_response = " ".join(clean_sent).strip()
                     if gen_response:
                         response = gen_response[0].upper() + gen_response[1:]
                         if not response.endswith(('.', '!', '?')): response += "."
-
-            # FALLBACK
-            if not response:
-                response = "I haven't learned those patterns. **What's the answer?**"
-                st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt
 
 #--------------------
 # Section 12: Logic - Hebrew Translation (Stays Global)
@@ -314,3 +323,4 @@ if prompt := st.chat_input("Communicate..."):
                             except: st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
