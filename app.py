@@ -228,48 +228,55 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - The Echo-Breaker (Internet Brain)
+# Section 11: Logic - The Knowledge Engine
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             
             # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
-            # This ONLY runs if you have 'speak' in the Admin Box
             if st.session_state.get('is_speak_mode'):
                 from googlesearch import search
-                import requests
                 
-                with st.spinner("🌐 BDL is breaking the echo..."):
-                    # 1. PROBLEM SOLVER: If it looks like a question, hit the web immediately
-                    query_words = ['how', 'why', 'what', 'who', 'where', 'solve', 'is', '?']
+                with st.status("🚀 BDL is fetching real data...", expanded=False) as status:
+                    # 1. Check if it's a specific question (Who/What/How)
+                    query_words = ['how', 'why', 'what', 'who', 'where', 'is', 'solve']
                     if any(qw in prompt.lower() for qw in query_words):
                         try:
-                            # Search for the actual answer, not just the words
-                            results = list(search(prompt, stop=3))
-                            if results:
-                                response = f"I've solved that for you. Here is the data: {results[0]}"
+                            # Search Wikipedia first for a solid answer
+                            page = wiki.page(prompt.replace("what is", "").replace("who is", "").strip())
+                            if page.exists():
+                                response = f"Knowledge found: {page.summary[:300]}..."
+                            else:
+                                # Fallback to Google Search results
+                                results = list(search(prompt, stop=1))
+                                if results:
+                                    response = f"I solved this using the web. See here: {results[0]}"
                         except:
                             pass
 
-                    # 2. DICTIONARY STITCHER: If it's a statement, find meanings for unknown words
+                    # 2. If it's still repeating/unknown, pull definitions for EVERY unknown word
                     if not response:
                         input_tokens = prompt.lower().split()
                         stitched = []
                         for word in input_tokens:
-                            # Priority 1: Check your Google Sheet
                             word_match = current_df[current_df['question'].str.lower() == word]
                             if not word_match.empty:
                                 stitched.append(str(word_match.iloc[-1]['answer']))
-                            
-                            # Priority 2: Standard Bridges
-                            elif word in ['the', 'and', 'with', 'my', 'your']:
+                            elif word in ['the', 'and', 'with', 'is', 'of']:
                                 stitched.append(word)
-                                
-                            # Priority 3: The "Echo Breaker" - If unknown, ask the web
                             else:
-                                stitched.append(f"[{word}: Search Required]") # This stops the repeat
+                                # INTERNET FALLBACK: Get a 1-sentence definition
+                                try:
+                                    w_page = wiki.page(word)
+                                    if w_page.exists():
+                                        stitched.append(f"({w_page.summary[:50]}...)")
+                                    else:
+                                        stitched.append(word)
+                                except:
+                                    stitched.append(word)
                         
                         response = " ".join(stitched).capitalize()
+                status.update(label="Knowledge Integrated!", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
@@ -323,6 +330,7 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
 
