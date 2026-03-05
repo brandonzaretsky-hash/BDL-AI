@@ -71,57 +71,35 @@ def load_fresh_data():
     return pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
 
 #--------------------
-# Section 4: Sidebar - Access Control & Secret Speak Mode
+# Section 4: Sidebar - Access Control & Mode Switching
 #--------------------
 with st.sidebar:
     st.title("🔐 Master Control")
+    
+    # Universal Input Box
     admin_input = st.text_input("Admin Key", type="password")
     
-    # THE TOGGLE SWITCH
+    # 1. Check for the "speak" command toggle
     if admin_input.lower().strip() == "speak":
         st.session_state.is_speak_mode = True
-        st.warning("🕵️ Neural Speak Mode: ON")
-        st.caption("All chat input will now be synthesized.")
+        st.session_state.is_admin = False
+        st.warning("🕵️ Neural Speak Mode: ACTIVE")
+        st.caption("Chat input will now be synthesized from memories.")
+        conf_level = 85 # Default for synthesis
+        
+    # 2. Check for the standard admin password
     elif admin_input == "admin123":
         st.session_state.is_admin = True
-        st.session_state.is_speak_mode = False # Turn off speak if logging into Admin
-        st.success("Admin Dashboard Active")
+        st.session_state.is_speak_mode = False
+        st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
+        st.markdown("---")
+        st.write("🧠 **Match Strictness**")
+        conf_level = st.slider("Strictness", 50, 100, 85)
+        
+    # 3. Default to User Mode
     else:
         st.session_state.is_admin = False
         st.session_state.is_speak_mode = False
-        
-        stitched_parts = []
-        if not df.empty:
-            st.markdown("### 🧠 Logic Synthesis")
-            for word in target_keys:
-                questions = df['question'].fillna('').astype(str).tolist()
-                match, score = process.extractOne(word, questions, scorer=fuzz.token_sort_ratio)
-                
-                if score >= 75:
-                    learned_val = df[df['question'] == match].iloc[-1]['answer']
-                    stitched_parts.append(str(learned_val))
-                    st.write(f"🔹 `{word}` -> *{learned_val}*")
-                else:
-                    # Grammar Bridge: Keep small words to make it make sense
-                    if len(word) <= 3 or word.lower() in ['with', 'from', 'this', 'that']:
-                        stitched_parts.append(word)
-                        st.write(f"🔸 `{word}` -> (Bridge)")
-            
-            final_sentence = " ".join(stitched_parts).capitalize()
-            if final_sentence and not final_sentence.endswith(('.', '!', '?')): final_sentence += "."
-
-            try:
-                tts_gen = gTTS(final_sentence, lang='en')
-                gen_fp = io.BytesIO()
-                tts_gen.write_to_fp(gen_fp)
-                st.audio(gen_fp, format='audio/mp3')
-                st.info(f"📢 Generated: {final_sentence}")
-            except: st.error("Voice Engine Failed")
-
-    elif st.session_state.is_admin:
-        st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
-        conf_level = st.slider("Strictness", 50, 100, 85)
-    else:
         st.info("User Mode Active")
         conf_level = 85
     
@@ -132,7 +110,6 @@ with st.sidebar:
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
-
 #--------------------
 # Section 5: Sidebar - Maintenance & Diagnostics
 #--------------------
@@ -317,4 +294,5 @@ elif not response:
                         except: st.warning("HE Voice Error")
 
         st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
