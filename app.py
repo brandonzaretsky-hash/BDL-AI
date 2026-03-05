@@ -214,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - Deep Scan Knowledge Engine
+# Section 11: Logic - Infinite Knowledge & NHL Specialist
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -225,32 +225,29 @@ if prompt := st.chat_input("Communicate..."):
                 # We identify as your BDL bot to Wikipedia
                 wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
                 
-                # LIMIT: Set this to 5000 for a massive response!
-                CHAR_LIMIT = 5000 
+                # THE MAX CAP: ~2,000 Words (12,000 characters)
+                CHAR_LIMIT = 12000 
 
                 with st.status("🚀 BDL is performing a Deep Scan...", expanded=False) as status:
-                    query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', '?']
+                    query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', 'list', '?']
                     is_question = any(k in prompt.lower() for k in query_keywords)
                     
                     if is_question:
-                        # Clean the prompt
+                        # Clean the prompt for the search engine
                         wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
                         page = wiki_link.page(wiki_query)
                         
                         if page.exists():
-                            # WE GRAB THE FULL TEXT HERE (Intro + All Sections)
+                            # WE GRAB THE FULL TEXT (Intro + All Chapters)
                             full_text = page.text 
-                            if len(full_text) > 100:
-                                response = full_text[:CHAR_LIMIT] + "\n\n[End of Deep Scan]"
-                            else:
-                                response = "The file is too small to summarize."
+                            response = full_text[:CHAR_LIMIT] + "\n\n[--- END OF DATA STREAM ---]"
                         else:
-                            # Search Fallback
+                            # Fallback to Google Search
                             from googlesearch import search
                             res = list(search(prompt, num_results=1))
-                            response = f"I found a web link for you: {res[0]}" if res else "No records found."
+                            response = f"I solved this using the web. Link: {res[0]}" if res else "No records found."
                     
-                    # 2. Memory Stitching (If not a question)
+                    # 2. Memory Stitching (Non-Questions)
                     if not response:
                         tokens = prompt.lower().split()
                         stitched = []
@@ -258,18 +255,18 @@ if prompt := st.chat_input("Communicate..."):
                             match = current_df[current_df['question'].str.lower() == word]
                             if not match.empty:
                                 stitched.append(str(match.iloc[-1]['answer']))
-                            elif word in ['is', 'the', 'and', 'with', 'of', 'in']:
+                            elif word in ['is', 'the', 'and', 'with', 'of', 'in', 'to']:
                                 stitched.append(word)
                             else:
                                 # Quick lookup for unknown single words
                                 w_page = wiki_link.page(word)
                                 if w_page.exists():
-                                    stitched.append(f"({w_page.summary[:100]}...)")
+                                    stitched.append(f"({w_page.summary[:150]}...)")
                                 else:
                                     stitched.append(word)
                         response = " ".join(stitched).capitalize()
 
-                    status.update(label=f"Scan Complete: {len(response)} characters found", state="complete")
+                    status.update(label=f"Scan Complete: {len(response)} characters integrated", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
@@ -278,30 +275,57 @@ if prompt := st.chat_input("Communicate..."):
                     match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
                     if score >= 90:
                         response = current_df[current_df['question'] == match].iloc[-1]['answer']
-#--------------------
-# Section 12 & 13: Processing & Final Voice Output
-#--------------------
-        if hebrew_mode and response and "Result:" not in response:
-            try: hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            except: pass
 
+            if not response:
+                response = "I haven't learned that yet. **What is the answer?**"
+                st.session_state.waiting_for_answer = True
+                st.session_state.last_question = prompt
+
+#--------------------
+# Section 12: Logic - Hebrew Translation (RESTORATION)
+#--------------------
+        hebrew_trans = ""
+        if hebrew_mode and response and "Result:" not in response:
+            try:
+                # We translate only the first 1000 chars for speed, but response stays long
+                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:1000])
+            except:
+                pass
+
+#--------------------
+# Section 13: Logic - Multi-Voice Output Engine
+#--------------------
         if response:
             display_text = response
-            if hebrew_trans: display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
+            if hebrew_trans:
+                display_text += f"\n\n<div class='rtl-container'>🇮🇱 **Hebrew Summary:** {hebrew_trans}</div>"
+            
             with st.chat_message("assistant"):
                 st.markdown(display_text, unsafe_allow_html=True)
+                
+                # VOICE ROW
+                v_col1, v_col2 = st.columns(2)
                 if voice_mode:
-                    v1, v2 = st.columns(2)
-                    with v1:
+                    with v_col1:
                         try:
-                            t_en = gTTS(response, lang='en')
-                            fp = io.BytesIO(); t_en.write_to_fp(fp)
-                            st.audio(fp, format='audio/mp3')
-                        except: st.warning("EN Voice Error")
+                            # Note: gTTS will take a second to generate 2000 words!
+                            tts_en = gTTS(response[:3000], lang='en') # Capped at 3000 for voice stability
+                            en_fp = io.BytesIO()
+                            tts_en.write_to_fp(en_fp)
+                            st.audio(en_fp, format='audio/mp3')
+                            st.caption("🔊 English Audio (Full Stream)")
+                        except:
+                            st.warning("EN Voice Overload - Try a shorter prompt.")
+                    
+                    if hebrew_mode and hebrew_trans:
+                        with v_col2:
+                            try:
+                                tts_he = gTTS(hebrew_trans, lang='iw') # Using 'iw' for Hebrew
+                                he_fp = io.BytesIO()
+                                tts_he.write_to_fp(he_fp)
+                                st.audio(he_fp, format='audio/mp3')
+                                st.caption("🇮🇱 Hebrew Audio")
+                            except:
+                                st.warning("HE Voice Error")
+
             st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-
-
-
-
-
