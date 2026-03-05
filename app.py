@@ -221,27 +221,50 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Neural Speak Mode vs Standard Retrieval
+# Section 11: Logic - Neural Speak Mode (The Sense-Maker)
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             
-            # CASE A: NEURAL SPEAK MODE (The Stitcher)
+            # --- CASE A: NEURAL SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
-                words = prompt.lower().split()
+                input_tokens = prompt.lower().split()
                 stitched = []
-                for w in words:
-                    # Look for the word in the brain
-                    m = current_df[current_df['question'].str.contains(rf"\b{w}\b", case=False, na=False)]
-                    if not m.empty:
-                        stitched.append(str(m.sample(n=1).iloc[0]['answer']))
-                    elif len(w) <= 3: # Keep small bridge words for grammar
-                        stitched.append(w)
                 
+                # Logic Trace for debugging in console
+                found_neurons = []
+
+                for w in input_tokens:
+                    # 1. SEARCH: Look for a row where the Question matches the word EXACTLY
+                    # This ensures we get the specific "Meaning" you taught it.
+                    exact_match = current_df[current_df['question'].str.lower() == w]
+                    
+                    if not exact_match.empty:
+                        # Grab the verified answer for that specific word
+                        neuron = str(exact_match.iloc[-1]['answer'])
+                        stitched.append(neuron)
+                    
+                    # 2. GRAMMAR BRIDGE: If it's a common bridge word, keep it to maintain sense
+                    elif w in ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your']:
+                        stitched.append(w)
+                    
+                    # 3. FUZZY FALLBACK: Only if we can't find an exact match
+                    else:
+                        fuzzy_matches = current_df[current_df['question'].str.contains(rf"\b{w}\b", case=False, na=False)]
+                        if not fuzzy_matches.empty:
+                            stitched.append(str(fuzzy_matches.iloc[0]['answer']))
+
                 if stitched:
-                    response = " ".join(stitched).capitalize() + "."
+                    # Cleanup: Remove duplicate bridge words (e.g., "is is")
+                    clean_stitched = []
+                    for i, word in enumerate(stitched):
+                        if i == 0 or word != stitched[i-1]:
+                            clean_stitched.append(word)
+                    
+                    response = " ".join(clean_stitched).capitalize()
+                    if not response.endswith(('.', '!', '?')): response += "."
             
-            # CASE B: STANDARD MODE (The Literal Brain)
+            # --- CASE B: STANDARD MODE ---
             else:
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
@@ -254,7 +277,6 @@ if prompt := st.chat_input("Communicate..."):
                 response = "I haven't learned that pattern yet. **What is the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
-
 #--------------------
 # Section 12: Logic - Hebrew Translation (Fixed Indent)
 #--------------------
@@ -295,6 +317,7 @@ if prompt := st.chat_input("Communicate..."):
                             except: st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
 
