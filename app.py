@@ -188,7 +188,7 @@ for message in st.session_state.messages:
 # Section 9: Logic - Input & Calculator
 #--------------------
 if prompt := st.chat_input("Communicate..."):
-    # SPECIAL ADMIN COMMAND: FORGET THAT
+    # Special Admin Command
     if prompt.lower() == "forget that" and st.session_state.is_admin:
         if connection_status == "Online" and not df.empty:
             conn.update(data=df.drop(df.tail(1).index))
@@ -201,8 +201,10 @@ if prompt := st.chat_input("Communicate..."):
         response = ""
         # Math Check
         if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-            try: response = f"🔢 **Result:** {pd.eval(prompt)}"
-            except: pass
+            try: 
+                response = f"🔢 **Result:** {pd.eval(prompt)}"
+            except: 
+                pass
 
 #--------------------
 # Section 10: Logic - Learning
@@ -219,31 +221,27 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Standard Retrieval
+# Section 11: Logic - Neural Speak Mode vs Standard Retrieval
 #--------------------
-elif not response:
+        elif not response:
             current_df = load_fresh_data()
             
-            # --- IF SPEAK MODE IS ON: USE GENERATIVE BRAIN ---
+            # CASE A: NEURAL SPEAK MODE (The Stitcher)
             if st.session_state.get('is_speak_mode'):
-                input_keywords = prompt.lower().split()
-                stitched_parts = []
+                words = prompt.lower().split()
+                stitched = []
+                for w in words:
+                    # Look for the word in the brain
+                    m = current_df[current_df['question'].str.contains(rf"\b{w}\b", case=False, na=False)]
+                    if not m.empty:
+                        stitched.append(str(m.sample(n=1).iloc[0]['answer']))
+                    elif len(w) <= 3: # Keep small bridge words for grammar
+                        stitched.append(w)
                 
-                for word in input_keywords:
-                    # Find any row containing this word
-                    matches = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
-                    if not matches.empty:
-                        # Grab a random learned fragment
-                        fragment = matches.sample(n=1).iloc[0]['answer']
-                        stitched_parts.append(str(fragment))
-                    else:
-                        # Grammar Bridge: Keep small words for flow
-                        if len(word) <= 3: stitched_parts.append(word)
-
-                if stitched_parts:
-                    response = " ".join(stitched_parts).capitalize() + "."
+                if stitched:
+                    response = " ".join(stitched).capitalize() + "."
             
-            # --- IF SPEAK MODE IS OFF: USE LITERAL BRAIN ---
+            # CASE B: STANDARD MODE (The Literal Brain)
             else:
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
@@ -251,48 +249,52 @@ elif not response:
                     if score >= conf_level:
                         response = current_df[current_df['question'] == match].iloc[0]['answer']
 
-            # FALLBACK: If both brains fail
+            # FALLBACK
             if not response:
-                response = "I haven't learned those patterns yet. **Teach me?**"
+                response = "I haven't learned that pattern yet. **What is the answer?**"
                 st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt = prompt
+                st.session_state.last_question = prompt
 
 #--------------------
-# Section 12: Logic - Hebrew RTL
+# Section 12: Logic - Hebrew Translation (Fixed Indent)
 #--------------------
-    hebrew_trans = ""
-    if hebrew_mode and response and "Result:" not in response:
-        try:
-            hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-        except: pass
+        hebrew_trans = ""
+        if hebrew_mode and response and "Result:" not in response:
+            try:
+                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
+            except: 
+                pass
 
 #--------------------
-# Section 13: Logic - Voice Engine & Output
+# Section 13: Logic - Voice Engine & Final Output
 #--------------------
-    if response:
-        display_text = response
-        if hebrew_trans:
-            display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
-        
-        with st.chat_message("assistant"):
-            st.markdown(display_text, unsafe_allow_html=True)
-            if voice_mode:
-                v_col1, v_col2 = st.columns(2)
-                with v_col1:
-                    try:
-                        tts_en = gTTS(response, lang='en')
-                        en_fp = io.BytesIO(); tts_en.write_to_fp(en_fp)
-                        st.audio(en_fp, format='audio/mp3')
-                    except: st.warning("EN Voice Error")
-                if hebrew_mode and hebrew_trans:
-                    with v_col2:
+        if response:
+            display_text = response
+            if hebrew_trans:
+                display_text += f"\n\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
+            
+            with st.chat_message("assistant"):
+                st.markdown(display_text, unsafe_allow_html=True)
+                if voice_mode:
+                    v_col1, v_col2 = st.columns(2)
+                    with v_col1:
                         try:
-                            clean_he = re.sub('<[^<]+?>', '', hebrew_trans).replace('🇮🇱', '').strip()
-                            tts_he = gTTS(clean_he, lang='iw')
-                            he_fp = io.BytesIO(); tts_he.write_to_fp(he_fp)
-                            st.audio(he_fp, format='audio/mp3')
-                        except: st.warning("HE Voice Error")
+                            tts_en = gTTS(response, lang='en')
+                            en_fp = io.BytesIO()
+                            tts_en.write_to_fp(en_fp)
+                            st.audio(en_fp, format='audio/mp3')
+                        except: st.warning("EN Voice Error")
+                    if hebrew_mode and hebrew_trans:
+                        with v_col2:
+                            try:
+                                clean_he = re.sub('<[^<]+?>', '', hebrew_trans).replace('🇮🇱', '').strip()
+                                tts_he = gTTS(clean_he, lang='iw')
+                                he_fp = io.BytesIO()
+                                tts_he.write_to_fp(he_fp)
+                                st.audio(he_fp, format='audio/mp3')
+                            except: st.warning("HE Voice Error")
 
-        st.session_state.messages.append({"role": "assistant", "content": display_text})
+            st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
