@@ -3,8 +3,8 @@ pandas
 st-gsheets-connection
 thefuzz
 deep-translator
-gTTS
-googlesearch-python
 PyDictionary
-wikipedia-api
 wikipedia
+wikipedia-api
+googlesearch-python
+gTTS
