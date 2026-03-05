@@ -221,74 +221,70 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Neural Speak Mode (The Sense-Maker)
+# Section 11: Logic - Unified Grammar Brain
 #--------------------
         elif not response:
             current_df = load_fresh_data()
+            input_tokens = prompt.lower().split()
             
-            # --- CASE A: NEURAL SPEAK MODE ---
-            if st.session_state.get('is_speak_mode'):
-                input_tokens = prompt.lower().split()
-                stitched = []
-                
-                # Logic Trace for debugging in console
-                found_neurons = []
+            # --- PHASE 1: EXACT/FUZZY LOOKUP (Literal Brain) ---
+            questions = current_df['question'].fillna('').tolist()
+            if questions:
+                match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                if score >= conf_level:
+                    response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
-                for w in input_tokens:
-                    # 1. SEARCH: Look for a row where the Question matches the word EXACTLY
-                    # This ensures we get the specific "Meaning" you taught it.
-                    exact_match = current_df[current_df['question'].str.lower() == w]
+            # --- PHASE 2: GRAMMAR SYNTHESIS (Generative Brain) ---
+            # If no exact answer, or if in Speak Mode, we build the sentence
+            if not response or st.session_state.get('is_speak_mode'):
+                stitched = []
+                # Common bridge words to keep for grammar
+                grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
+                
+                for word in input_tokens:
+                    # Look for exact word definition in the brain
+                    exact_match = current_df[current_df['question'].str.lower() == word]
                     
                     if not exact_match.empty:
-                        # Grab the verified answer for that specific word
-                        neuron = str(exact_match.iloc[-1]['answer'])
-                        stitched.append(neuron)
-                    
-                    # 2. GRAMMAR BRIDGE: If it's a common bridge word, keep it to maintain sense
-                    elif w in ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your']:
-                        stitched.append(w)
-                    
-                    # 3. FUZZY FALLBACK: Only if we can't find an exact match
+                        stitched.append(str(exact_match.iloc[-1]['answer']))
+                    elif word in grammar_bridges:
+                        stitched.append(word)
                     else:
-                        fuzzy_matches = current_df[current_df['question'].str.contains(rf"\b{w}\b", case=False, na=False)]
-                        if not fuzzy_matches.empty:
-                            stitched.append(str(fuzzy_matches.iloc[0]['answer']))
+                        # Final fuzzy search for individual word
+                        fuzzy_w = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
+                        if not fuzzy_w.empty:
+                            stitched.append(str(fuzzy_w.iloc[0]['answer']))
 
                 if stitched:
-                    # Cleanup: Remove duplicate bridge words (e.g., "is is")
-                    clean_stitched = []
-                    for i, word in enumerate(stitched):
-                        if i == 0 or word != stitched[i-1]:
-                            clean_stitched.append(word)
+                    # Deduplicate (e.g., prevent "is is")
+                    clean_sent = []
+                    for i, w in enumerate(stitched):
+                        if i == 0 or w != stitched[i-1]:
+                            clean_sent.append(w)
                     
-                    response = " ".join(clean_stitched).capitalize()
-                    if not response.endswith(('.', '!', '?')): response += "."
-            
-            # --- CASE B: STANDARD MODE ---
-            else:
-                questions = current_df['question'].fillna('').tolist()
-                if questions:
-                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                    if score >= conf_level:
-                        response = current_df[current_df['question'] == match].iloc[0]['answer']
+                    # Construct Final Sentence
+                    gen_response = " ".join(clean_sent).strip()
+                    if gen_response:
+                        response = gen_response[0].upper() + gen_response[1:]
+                        if not response.endswith(('.', '!', '?')): response += "."
 
             # FALLBACK
             if not response:
-                response = "I haven't learned that pattern yet. **What is the answer?**"
+                response = "I haven't learned those patterns. **What's the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
+
 #--------------------
-# Section 12: Logic - Hebrew Translation (Fixed Indent)
+# Section 12: Logic - Hebrew Translation (Stays Global)
 #--------------------
         hebrew_trans = ""
         if hebrew_mode and response and "Result:" not in response:
             try:
                 hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            except: 
-                pass
+            except: pass
 
 #--------------------
-# Section 13: Logic - Voice Engine & Final Output
+# Section 13: Logic - Voice Engine & Output
 #--------------------
         if response:
             display_text = response
@@ -309,6 +305,7 @@ if prompt := st.chat_input("Communicate..."):
                     if hebrew_mode and hebrew_trans:
                         with v_col2:
                             try:
+                                # Clean translation for TTS
                                 clean_he = re.sub('<[^<]+?>', '', hebrew_trans).replace('🇮🇱', '').strip()
                                 tts_he = gTTS(clean_he, lang='iw')
                                 he_fp = io.BytesIO()
@@ -317,7 +314,3 @@ if prompt := st.chat_input("Communicate..."):
                             except: st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-
-
-
