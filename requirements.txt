@@ -4,3 +4,5 @@ st-gsheets-connection
 thefuzz
 deep-translator
 gTTS
+googlesearch-python
+PyDictionary
