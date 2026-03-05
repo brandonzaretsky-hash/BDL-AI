@@ -226,78 +226,49 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.waiting_for_answer = False
 
 #--------------------
-# Section 11: Logic - Unified Grammar, Slang, & Neural Brain
+# Section 11: Logic - Precision Brain
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             input_tokens = prompt.lower().split()
             
-            # --- PHASE 1: EXACT/FUZZY LOOKUP (Literal Brain) ---
-            questions = current_df['question'].fillna('').tolist()
-            if questions:
-                match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                if score >= conf_level:
-                    response = current_df[current_df['question'] == match].iloc[-1]['answer']
+            # --- PHASE 1: EXACT MATCH (No guessing!) ---
+            # This prevents BDL from dumping huge lists for simple words like "Hello"
+            exact_match_df = current_df[current_df['question'].str.lower() == prompt.lower()]
+            if not exact_match_df.empty:
+                response = exact_match_df.iloc[-1]['answer']
 
-            # --- PHASE 2: GLOBAL GRAMMAR & SLANG SYNTHESIS ---
-            # Triggered if no exact match OR if Speak Mode is active
-            if not response or st.session_state.get('is_speak_mode'):
+            # --- PHASE 2: NEURAL SPEAK / SLANG SYNTHESIS ---
+            if not response and (st.session_state.get('is_speak_mode') or slang_mode):
                 stitched = []
-                
-                # Standard Connectors
                 grammar_bridges = ['is', 'the', 'are', 'was', 'with', 'and', 'my', 'your', 'in', 'at', 'to', 'of']
-                
-                # Slang Connectors (Active if toggle is on)
                 slang_list = ['no cap', 'fr', 'bet', 'rizz', 'sus', 'vibing', 'bussin', 'bruh']
                 
                 for word in input_tokens:
-                    # 1. Check learned brain
-                    exact_match = current_df[current_df['question'].str.lower() == word]
-                    
-                    if not exact_match.empty:
-                        stitched.append(str(exact_match.iloc[-1]['answer']))
-                    
-                    # 2. Check Standard Grammar
-                    elif word in grammar_bridges:
+                    # Look for single-word definitions
+                    word_match = current_df[current_df['question'].str.lower() == word]
+                    if not word_match.empty:
+                        stitched.append(str(word_match.iloc[-1]['answer']))
+                    elif word in grammar_bridges or (slang_mode and word in slang_list):
                         stitched.append(word)
-                    
-                    # 3. Check Slang (If enabled via the toggle)
-                    elif 'slang_mode' in globals() and slang_mode and word in slang_list:
-                        stitched.append(word)
-                        
-                    else:
-                        # Fuzzy search for individual word
-                        fuzzy_w = current_df[current_df['question'].str.contains(rf"\b{word}\b", case=False, na=False)]
-                        if not fuzzy_w.empty:
-                            stitched.append(str(fuzzy_w.iloc[0]['answer']))
-
+                
                 if stitched:
-                    # Deduplicate and Clean
-                    clean_sent = []
-                    for i, w in enumerate(stitched):
-                        if i == 0 or w != stitched[i-1]:
-                            clean_sent.append(w)
-                    
-                    gen_response = " ".join(clean_sent).strip()
-                    if gen_response:
-                        response = gen_response[0].upper() + gen_response[1:]
-                        if not response.endswith(('.', '!', '?')): response += "."
+                    response = " ".join(stitched).capitalize() + "."
+
+            # --- PHASE 3: FUZZY FALLBACK (Only if Phase 1 & 2 fail) ---
+            if not response:
+                questions = current_df['question'].fillna('').tolist()
+                if questions:
+                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                    # We increased the strictness to 90 so it doesn't "guess" wrong
+                    if score >= 90:
+                        response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
             # FALLBACK
             if not response:
-                response = "I haven't learned those patterns. **What is the answer?**"
+                response = "I haven't learned that pattern yet. **What is the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
-
-#--------------------
-# Section 12: Logic - Hebrew & Global Processing
-#--------------------
-        hebrew_trans = ""
-        if 'hebrew_mode' in globals() and hebrew_mode and response and "Result:" not in response:
-            try:
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response)
-            except:
-                pass
 
 #--------------------
 # Section 13: Logic - Voice Engine & Final Output
@@ -331,3 +302,4 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
