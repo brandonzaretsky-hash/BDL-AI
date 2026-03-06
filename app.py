@@ -91,7 +91,7 @@ with st.sidebar:
 #-------------------
 #Section 3 Data logic Functions
 #-------------------
-   def save_direct(q, a):
+def save_direct(q, a):
     """Direct Write for Super-Devs"""
     try:
         df = conn.read(worksheet="Memory", ttl="1s")
@@ -219,5 +219,6 @@ if prompt := st.chat_input("Communicate..."):
                         except: st.warning("HE Voice Error")
         
         st.session_state.messages.append({"role": "assistant", "content": full_display})
+
 
 
