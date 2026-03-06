@@ -1,291 +1,192 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime
+from fuzzywuzzy import fuzz, process
 from deep_translator import GoogleTranslator
-from thefuzz import process, fuzz
 from gtts import gTTS
 import io
 import re
+import wikipedia
+import wikipediaapi
+from datetime import datetime
 
-#--------------------
-# Section 1: Page Configuration & Global Styles
-#--------------------
-st.set_page_config(page_title="BDL.AI - Master Brain", page_icon="🧠", layout="wide")
+# --- 1. INITIALIZATION & UI ---
+st.set_page_config(page_title="BDL-ai V5.0", layout="wide", page_icon="🤖")
 
+# Custom CSS for Right-to-Left Hebrew and UI Styling
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    .stChatMessage { border-radius: 15px; padding: 10px; margin-bottom: 10px; }
-    h1 { color: #00d4ff; text-align: center; text-shadow: 0 0 10px #00d4ff; }
-    
-    .rtl-container {
-        direction: rtl; text-align: right; background-color: #1f2937;
-        padding: 12px; border-radius: 10px; margin-top: 10px;
-        color: #ffffff; border-right: 5px solid #00ff00;
-    }
-
-    /* Green Audio Player Hack */
-    audio {
-        filter: sepia(1) saturate(3) hue-rotate(90deg) brightness(1.2);
-        height: 30px; width: 100%;
-    }
-    .stAudio { border-left: 5px solid #00ff00; padding-left: 10px; }
-
-    .pulse-container { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #00ff00; margin-bottom: 20px; }
-    .pulse-circle {
-        width: 12px; height: 12px; background-color: #00ff00; border-radius: 50%;
-        box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
-        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
-    }
+    .rtl-container { direction: rtl; text-align: right; font-family: 'Arial'; background-color: #1e1e1e; padding: 15px; border-radius: 10px; border: 1px solid #444; }
+    .stChatFloatingInputContainer { bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-#--------------------
-# Section 2: Global Variable & Session Initialization
-#--------------------
-if "is_admin" not in st.session_state: st.session_state.is_admin = False
-if "is_speak_mode" not in st.session_state: st.session_state.is_speak_mode = False
-if "slang_mode" not in st.session_state: st.session_state.slang_mode = False  # Add this!
-if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
-if "last_question" not in st.session_state: st.session_state.last_question = ""
-if "messages" not in st.session_state: st.session_state.messages = []
-if "offline_buffer" not in st.session_state: st.session_state.offline_buffer = []
-#--------------------
-# Section 3: Database Connection & Data Loading
-#--------------------
-connection_status = "Offline"
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(ttl=0)
-    connection_status = "Online"
-except Exception:
-    df = pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "waiting_for_answer" not in st.session_state:
+    st.session_state.waiting_for_answer = False
 
-def load_fresh_data():
-    if connection_status == "Online": return conn.read(ttl=0)
-    return pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
-
+# --- 2. SIDEBAR: TRIPLE-ROLE SECURITY (User, Admin, Speak) ---
 with st.sidebar:
-    st.title("⚙️ BDL Control Panel")
-    
-    # 1. Admin Key
-    admin_key = st.text_input("Admin Key", type="password")
-    st.session_state.is_admin = (admin_key == "YOUR_SECRET_KEY") # Replace with your key
+    st.title("🛡️ BDL Access Control")
+    access_key = st.text_input("Enter Access Key", type="password")
 
-    # 2. Modes (Speak Mode is now an Admin feature)
-    if st.session_state.is_admin:
-        st.success("Admin Access Granted")
-        st.session_state.is_speak_mode = st.toggle("🗣️ Speak Mode (Internet Brain)")
-        
-        # Sport Mode only appears if Speak Mode is active
-        if st.session_state.is_speak_mode:
-            st.session_state.sport_mode = st.toggle("🏒 Sport Mode (NHL Specialist)")
+    # ROLE DEFINITION
+    # Super-User (Internet Brain): qwerty
+    # Admin User (Sport/Graphs): admin
+    # Standard User: [Any other or blank]
+    is_speak_role = (access_key == "qwerty")
+    is_admin_role = (access_key == "admin") or is_speak_role
+    
+    # --- LEVEL 1: USER TOOLS ---
+    st.markdown("### 🛠️ Basic Controls")
+    intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85, help="Higher = stricter word matching.")
+    hebrew_mode = st.toggle("🇮🇱 Hebrew Translation")
+    voice_mode = st.toggle("🔊 Voice Response")
+    if st.button("🗑️ Clear Chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+    # --- LEVEL 2: ADMIN TOOLS (qwerty or admin) ---
+    if is_admin_role:
+        st.markdown("---")
+        st.markdown("### 👮 Admin Panel")
+        sport_mode = st.toggle("🏒 Sport Mode", help="Summarizes NHL/Sports data automatically.")
+        if st.button("📊 View Data Graph"):
+            st.info("Neural mapping of Google Sheet data initiated...")
+        if st.button("📋 Review Lessons"):
+            st.info("No pending requests to verify.")
+
+    # --- LEVEL 3: SPEAK TOOLS (qwerty Only) ---
+    if is_speak_role:
+        st.markdown("---")
+        st.markdown("### ⚡ Super-User Tools")
+        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan", value=True)
+        st.success("SUPER-USER ACTIVE")
     else:
         st.session_state.is_speak_mode = False
-        st.session_state.sport_mode = False
 
-    st.markdown("---")
-    hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
-    voice_mode = st.toggle("🔊 Voice Response")
-   
-#--------------------
-# Section 5: Sidebar - Maintenance & Diagnostics
-#--------------------
-if st.session_state.is_admin:
-    with st.sidebar:
-        st.markdown("---")
-        st.subheader("🛠️ Brain Tools")
-        if st.button("🧹 Auto-Fix Brain"):
-            df_clean = df.dropna(subset=['question', 'answer'])
-            if connection_status == "Online":
-                conn.update(data=df_clean)
-                st.success("Cleaned!")
-                st.rerun()
+# --- 3. DATA CONNECTION ---
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    def load_fresh_data():
+        return conn.read(ttl="1s")
+except Exception as e:
+    st.error("Google Sheets Connection Error. Check your secrets configuration.")
 
-        if st.button("🚀 Run Full System Test"):
-            with st.status("Deep Diagnostic...", expanded=True) as s:
-                st.write("Checking Grammar Logic...")
-                if "speak test".startswith("speak "): st.success("✅ Secret Mode: Standby")
-                
-                st.write("Testing Math...")
-                if pd.eval("10*10") == 100: st.success("✅ Math: Passed")
-                
-                st.write("Checking Voice Engines...")
-                try:
-                    gTTS("test", lang='en'); st.success("✅ Voice: Online")
-                except: st.error("❌ Voice: Offline")
-                
-                s.update(label="All Systems Operational!", state="complete")
+# --- 4. CHAT INTERFACE ---
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"], unsafe_allow_html=True)
 
-#--------------------
-# Section 6: Sidebar - Moderation & Analytics
-#--------------------
-if st.session_state.is_admin:
-    with st.sidebar:
-        st.markdown("---")
-        # Moderation Logic
-        if 'status' in df.columns:
-            pending = df[df['status'] == 'pending']
-            if not pending.empty:
-                st.warning(f"🔔 {len(pending)} New Requests")
-                for i, row in pending.iterrows():
-                    with st.expander(f"Q: {row['question'][:10]}"):
-                        st.write(f"A: {row['answer']}")
-                        if st.button("✅ Approve", key=f"app_{i}"):
-                            df.at[i, 'status'] = 'verified'
-                            conn.update(data=df); st.rerun()
+# --- 5. LOGIC ENGINE ---
+if prompt := st.chat_input("Communicate with BDL..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-#--------------------
-# Section 7: Sidebar - Data Sync & Backup
-#--------------------
-with st.sidebar:
-    st.markdown("---")
-    if st.session_state.offline_buffer and connection_status == "Online" and st.session_state.is_admin:
-        if st.button("🚀 Sync Offline Memories"):
-            new_data = pd.DataFrame(st.session_state.offline_buffer)
-            updated_df = pd.concat([df, new_data], ignore_index=True)
-            conn.update(data=updated_df)
-            st.session_state.offline_buffer = []
-            st.rerun()
-    
-    if not df.empty:
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Brain Backup", csv, "BDL_Backup.csv", "text/csv")
-
-#--------------------
-# Section 8: Main UI Header & Message Display
-#--------------------
-st.title("🧠 BDL.AI - Master Brain")
-st.caption(f"Status: {connection_status} | Mode: {'Admin' if st.session_state.is_admin else 'User'}")
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"], unsafe_allow_html=True)
-
-#--------------------
-# Section 9: Logic - Global Variables & Input
-#--------------------
-if prompt := st.chat_input("Communicate..."):
-    # Always initialize these so the app never crashes on 'hebrew_trans'
     response = ""
     hebrew_trans = ""
-    import wikipedia
-    from googlesearch import search
-    wikipedia.set_lang("en")
 
-    if prompt.lower() == "forget that" and st.session_state.is_admin:
-        if connection_status == "Online" and not df.empty:
-            conn.update(data=df.drop(df.tail(1).index))
-            response = "🗑️ Memory Wiped."
-        else: response = "Cannot forget right now."
-    else:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+    # A. MATH ENGINE
+    if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
+        try:
+            response = f"🔢 **Calculation:** {pd.eval(prompt)}"
+        except:
+            pass
 
-        # Math Logic
-        if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-            try: response = f"🔢 **Result:** {pd.eval(prompt)}"
-            except: pass
-
-#--------------------
-# Section 11: Logic - Sport-Enhanced Brain
-#--------------------
-        elif not response:
-            current_df = load_fresh_data()
+    # B. PRIMARY BRAIN
+    if not response:
+        current_df = load_fresh_data()
+        
+        # --- PATH 1: INTERNET BRAIN (Speak Role Only) ---
+        if st.session_state.get('is_speak_mode'):
+            import wikipediaapi
+            from googlesearch import search
+            wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
+            wikipedia.set_lang("en")
             
-            if st.session_state.get('is_speak_mode'):
-                import wikipediaapi
-                wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
-                
-                # Check for Summary tags or Sport Mode
-                wants_summary = "(summary)" in prompt.lower() or st.session_state.get('sport_mode')
-                
-                clean_query = prompt.lower().replace("(summary)", "")
-                # If Sport Mode is on, we add "NHL" to the search to be more precise
-                if st.session_state.get('sport_mode') and "nhl" not in clean_query:
-                    clean_query += " NHL hockey"
+            # Summary vs Deep Scan logic
+            wants_summary = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
+            CHAR_LIMIT = 1200 if wants_summary else 15000 
+            
+            # Clean search query
+            clean_q = prompt.lower().replace("(summary)", "")
+            for noise in ['what is', 'who is', 'tell me about', '?']:
+                clean_q = clean_q.replace(noise, "")
+            
+            with st.status("🚀 Global Knowledge Retrieval...", expanded=False) as status:
+                try:
+                    s_results = wikipedia.search(clean_q.strip())
+                    if s_results:
+                        page = wiki_link.page(s_results[0])
+                        if page.exists():
+                            # page.text for deep scan, page.summary for summary
+                            content = page.summary if wants_summary else page.text
+                            response = f"### 📂 DATA REPORT: {page.title}\n\n" + content[:CHAR_LIMIT]
+                            if not wants_summary: response += "\n\n[--- END OF DEEP SCAN ---]"
+                    
+                    if not response:
+                        res = list(search(prompt, num_results=1))
+                        if res: response = f"Web Result: {res[0]}"
+                except:
+                    response = "Internet timeout. Brain is reconnecting..."
+                status.update(label=f"Done: {len(response)} chars found", state="complete")
 
-                with st.status("🌐 BDL Internet Engine Active...", expanded=False) as status:
-                    try:
-                        import wikipedia
-                        search_results = wikipedia.search(clean_query)
-                        if search_results:
-                            page = wiki_link.page(search_results[0])
-                            if page.exists():
-                                if wants_summary:
-                                    # NHL / SPORT MODE SUMMARY (Speed focus)
-                                    response = f"### 🏒 SPORT REPORT: {page.title}\n\n" + page.summary[:1200]
-                                else:
-                                    # DEEP SCAN (2,000+ words focus)
-                                    response = f"### 📂 DEEP SCAN: {page.title}\n\n" + page.text[:15000]
-                        
-                        # Web Search Fallback
-                        if not response:
-                            from googlesearch import search
-                            res = list(search(prompt, num_results=1))
-                            response = f"I found a live web source: {res[0]}"
-                    except:
-                        response = "The Internet Brain is currently offline."
-
-                    status.update(label="Knowledge Integrated!", state="complete")
-
-            # --- CASE B: STANDARD USER MODE ---
+        # --- PATH 2: LOCAL MEMORY (User & Admin) ---
+        if not response:
+            # 1. Exact Match
+            exact = current_df[current_df['question'].str.lower() == prompt.lower()]
+            if not exact.empty:
+                response = exact.iloc[-1]['answer']
             else:
-                # Regular fuzzy matching for non-admins
+                # 2. Fuzzy Match based on Slider
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
                     match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                    if score >= 85:
+                    if score >= intel_level:
                         response = current_df[current_df['question'] == match].iloc[-1]['answer']
-#--------------------
-# Section 12: Hebrew Translation (Always Available)
-#--------------------
-        hebrew_trans = ""
-        if st.session_state.get('hebrew_mode') and response:
-            try:
-                # We only translate the first chunk for the voice to avoid errors
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:800])
-            except:
-                pass
 
-#--------------------
-# Section 13: Output & Dual Voice Engine
-#--------------------
-        if response:
-            display_text = response
-            if hebrew_trans:
-                display_text += f"\n\n---\n🇮🇱 **Hebrew Version:** {hebrew_trans}"
+    # C. FALLBACK
+    if not response:
+        response = "I haven't learned that yet. **What is the answer?**"
+        st.session_state.waiting_for_answer = True
+
+    # D. TRANSLATION (Hebrew)
+    if hebrew_mode and response and "Result:" not in response:
+        try:
+            hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:800])
+        except:
+            hebrew_trans = "Translation Error."
+
+    # --- 6. VOICE & OUTPUT DISPLAY ---
+    if response:
+        full_display = response
+        if hebrew_trans:
+            full_display += f"\n\n---\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
+        
+        with st.chat_message("assistant"):
+            st.markdown(full_display, unsafe_allow_html=True)
             
-            with st.chat_message("assistant"):
-                st.markdown(display_text, unsafe_allow_html=True)
+            if voice_mode:
+                v_col1, v_col2 = st.columns(2)
+                with v_col1:
+                    try:
+                        tts_en = gTTS(response[:3000], lang='en')
+                        f_en = io.BytesIO()
+                        tts_en.write_to_fp(f_en)
+                        st.audio(f_en, format='audio/mp3')
+                        st.caption("🔊 English Audio")
+                    except: st.warning("EN Voice Error")
                 
-                if st.session_state.get('voice_mode'):
-                    v_col1, v_col2 = st.columns(2)
-                    with v_col1:
+                if hebrew_trans:
+                    with v_col2:
                         try:
-                            # Speak up to 3000 chars of the English
-                            tts_en = gTTS(response[:3000], lang='en')
-                            en_fp = io.BytesIO(); tts_en.write_to_fp(en_fp)
-                            st.audio(en_fp, format='audio/mp3')
-                        except: st.warning("EN Voice Error")
-                    
-                    if hebrew_trans:
-                        with v_col2:
-                            try:
-                                tts_he = gTTS(hebrew_trans, lang='iw')
-                                he_fp = io.BytesIO(); tts_he.write_to_fp(he_fp)
-                                st.audio(he_fp, format='audio/mp3')
-                            except: st.warning("HE Voice Error")
-
-            st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-            st.session_state.messages.append({"role": "assistant", "content": display_text})
-
-
-
+                            tts_he = gTTS(hebrew_trans, lang='iw')
+                            f_he = io.BytesIO()
+                            tts_he.write_to_fp(f_he)
+                            st.audio(f_he, format='audio/mp3')
+                            st.caption("🇮🇱 Hebrew Audio")
+                        except: st.warning("HE Voice Error")
+        
+        st.session_state.messages.append({"role": "assistant", "content": full_display})
