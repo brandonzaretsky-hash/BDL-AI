@@ -9,3 +9,4 @@ wikipedia-api
 googlesearch-python
 gTTS
 fuzzywuzzy
+python-Levenshtein
