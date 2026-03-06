@@ -214,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - Infinite Knowledge & NHL Specialist
+# Section 11: Logic - Uncapped Knowledge Engine V4.0
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -222,65 +222,61 @@ if prompt := st.chat_input("Communicate..."):
             # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
                 import wikipediaapi
-                # We identify as your BDL bot to Wikipedia
+                from googlesearch import search
                 wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
                 
-                # THE MAX CAP: ~2,000 Words (12,000 characters)
-                CHAR_LIMIT = 12000 
+                # THE MAX CAP: ~2,500 Words (15,000 characters)
+                CHAR_LIMIT = 15000 
 
-                with st.status("🚀 BDL is performing a Deep Scan...", expanded=False) as status:
-                    query_keywords = ['who', 'what', 'how', 'why', 'where', 'is', 'solve', 'list', '?']
-                    is_question = any(k in prompt.lower() for k in query_keywords)
-                    
-                    if is_question:
-                        # Clean the prompt for the search engine
-                        wiki_query = prompt.replace("who is", "").replace("what is", "").replace("?", "").strip()
-                        page = wiki_link.page(wiki_query)
+                with st.status("🚀 BDL is Deep-Scanning the Global Net...", expanded=False) as status:
+                    # 1. CLEAN THE QUERY: Remove "noise" words that break searches
+                    clean_query = prompt.lower()
+                    for word in ['what is', 'who is', 'tell me about', 'give me a list of', 'solve', '?']:
+                        clean_query = clean_query.replace(word, "")
+                    clean_query = clean_query.strip()
+
+                    # 2. THE SEARCH LOOP: Try to find the most relevant page
+                    try:
+                        import wikipedia
+                        search_results = wikipedia.search(clean_query)
+                        if search_results:
+                            # Grab the #1 result's full page
+                            page = wiki_link.page(search_results[0])
+                            if page.exists():
+                                # GRAB FULL TEXT: Intro + All Chapters
+                                response = f"### 📂 DATA REPORT: {page.title}\n\n" + page.text[:CHAR_LIMIT]
+                                response += "\n\n[--- END OF FULL DATA STREAM ---]"
                         
-                        if page.exists():
-                            # WE GRAB THE FULL TEXT (Intro + All Chapters)
-                            full_text = page.text 
-                            response = full_text[:CHAR_LIMIT] + "\n\n[--- END OF DATA STREAM ---]"
-                        else:
-                            # Fallback to Google Search
-                            from googlesearch import search
-                            res = list(search(prompt, num_results=1))
-                            response = f"I solved this using the web. Link: {res[0]}" if res else "No records found."
-                    
-                    # 2. Memory Stitching (Non-Questions)
-                    if not response:
-                        tokens = prompt.lower().split()
-                        stitched = []
-                        for word in tokens:
-                            match = current_df[current_df['question'].str.lower() == word]
-                            if not match.empty:
-                                stitched.append(str(match.iloc[-1]['answer']))
-                            elif word in ['is', 'the', 'and', 'with', 'of', 'in', 'to']:
-                                stitched.append(word)
-                            else:
-                                # Quick lookup for unknown single words
-                                w_page = wiki_link.page(word)
-                                if w_page.exists():
-                                    stitched.append(f"({w_page.summary[:150]}...)")
-                                else:
-                                    stitched.append(word)
-                        response = " ".join(stitched).capitalize()
+                        # 3. GOOGLE FALLBACK: If Wiki fails, pull the top 3 web snippets
+                        if not response:
+                            web_data = []
+                            for j in search(prompt, num_results=3):
+                                web_data.append(j)
+                            if web_data:
+                                response = "I couldn't find a full Wikipedia file, but I found these sources:\n\n" + "\n".join(web_data)
+                    except:
+                        response = "Memory connection timed out. Try a shorter topic name."
 
-                    status.update(label=f"Scan Complete: {len(response)} characters integrated", state="complete")
+                    status.update(label=f"Scan Complete: {len(response)} chars found", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
-                questions = current_df['question'].fillna('').tolist()
-                if questions:
-                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                    if score >= 90:
-                        response = current_df[current_df['question'] == match].iloc[-1]['answer']
+                # 1. Check for Exact Match First
+                exact = current_df[current_df['question'].str.lower() == prompt.lower()]
+                if not exact.empty:
+                    response = exact.iloc[-1]['answer']
+                else:
+                    # 2. Fuzzy Match with 85% Strictness
+                    questions = current_df['question'].fillna('').tolist()
+                    if questions:
+                        match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                        if score >= 85:
+                            response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
             if not response:
-                response = "I haven't learned that yet. **What is the answer?**"
+                response = "I haven't learned that pattern yet. **What is the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
-
 #--------------------
 # Section 12: Logic - Hebrew Translation (RESTORATION)
 #--------------------
@@ -329,3 +325,4 @@ if prompt := st.chat_input("Communicate..."):
                                 st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
