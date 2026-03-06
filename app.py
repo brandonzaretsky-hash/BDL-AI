@@ -214,7 +214,7 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - Uncapped Knowledge Engine V4.0
+# Section 11: Logic - Knowledge & Summary Specialist
 #--------------------
         elif not response:
             current_df = load_fresh_data()
@@ -222,107 +222,94 @@ if prompt := st.chat_input("Communicate..."):
             # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
                 import wikipediaapi
-                from googlesearch import search
                 wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
                 
-                # THE MAX CAP: ~2,500 Words (15,000 characters)
-                CHAR_LIMIT = 15000 
+                # Check for the (summary) tag
+                wants_summary = "(summary)" in prompt.lower()
+                clean_query = prompt.lower().replace("(summary)", "")
+                for noise in ['what is', 'who is', 'tell me about', '?']:
+                    clean_query = clean_query.replace(noise, "")
+                clean_query = clean_query.strip()
 
-                with st.status("🚀 BDL is Deep-Scanning the Global Net...", expanded=False) as status:
-                    # 1. CLEAN THE QUERY: Remove "noise" words that break searches
-                    clean_query = prompt.lower()
-                    for word in ['what is', 'who is', 'tell me about', 'give me a list of', 'solve', '?']:
-                        clean_query = clean_query.replace(word, "")
-                    clean_query = clean_query.strip()
-
-                    # 2. THE SEARCH LOOP: Try to find the most relevant page
+                with st.status(f"🌐 BDL is fetching {'Summary' if wants_summary else 'Deep Data'}...", expanded=False) as status:
                     try:
                         import wikipedia
                         search_results = wikipedia.search(clean_query)
                         if search_results:
-                            # Grab the #1 result's full page
                             page = wiki_link.page(search_results[0])
                             if page.exists():
-                                # GRAB FULL TEXT: Intro + All Chapters
-                                response = f"### 📂 DATA REPORT: {page.title}\n\n" + page.text[:CHAR_LIMIT]
-                                response += "\n\n[--- END OF FULL DATA STREAM ---]"
+                                if wants_summary:
+                                    # SUMMARY MODE: Only the first 1000 characters
+                                    response = f"### 📝 QUICK SUMMARY: {page.title}\n\n" + page.summary[:1000]
+                                else:
+                                    # DEEP MODE: Full page up to 15,000 characters
+                                    response = f"### 📂 DEEP SCAN: {page.title}\n\n" + page.text[:15000]
+                                    response += "\n\n[--- END OF FULL DATA STREAM ---]"
                         
-                        # 3. GOOGLE FALLBACK: If Wiki fails, pull the top 3 web snippets
                         if not response:
-                            web_data = []
-                            for j in search(prompt, num_results=3):
-                                web_data.append(j)
-                            if web_data:
-                                response = "I couldn't find a full Wikipedia file, but I found these sources:\n\n" + "\n".join(web_data)
+                            from googlesearch import search
+                            res = list(search(prompt, num_results=1))
+                            response = f"I couldn't find a file, but here is a web link: {res[0]}"
                     except:
-                        response = "Memory connection timed out. Try a shorter topic name."
+                        response = "Connection timeout. The internet brain is sleepy."
 
                     status.update(label=f"Scan Complete: {len(response)} chars found", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
-                # 1. Check for Exact Match First
-                exact = current_df[current_df['question'].str.lower() == prompt.lower()]
-                if not exact.empty:
-                    response = exact.iloc[-1]['answer']
-                else:
-                    # 2. Fuzzy Match with 85% Strictness
-                    questions = current_df['question'].fillna('').tolist()
-                    if questions:
-                        match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                        if score >= 85:
-                            response = current_df[current_df['question'] == match].iloc[-1]['answer']
+                # Fuzzy Match with 85% Strictness
+                questions = current_df['question'].fillna('').tolist()
+                if questions:
+                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+                    if score >= 85:
+                        response = current_df[current_df['question'] == match].iloc[-1]['answer']
 
             if not response:
-                response = "I haven't learned that pattern yet. **What is the answer?**"
+                response = "I haven't learned that yet. **What is the answer?**"
                 st.session_state.waiting_for_answer = True
                 st.session_state.last_question = prompt
 #--------------------
-# Section 12: Logic - Hebrew Translation (RESTORATION)
+# Section 12: Hebrew Translation (Always Available)
 #--------------------
         hebrew_trans = ""
-        if hebrew_mode and response and "Result:" not in response:
+        if st.session_state.get('hebrew_mode') and response:
             try:
-                # We translate only the first 1000 chars for speed, but response stays long
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:1000])
+                # We only translate the first chunk for the voice to avoid errors
+                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:800])
             except:
                 pass
 
 #--------------------
-# Section 13: Logic - Multi-Voice Output Engine
+# Section 13: Output & Dual Voice Engine
 #--------------------
         if response:
             display_text = response
             if hebrew_trans:
-                display_text += f"\n\n<div class='rtl-container'>🇮🇱 **Hebrew Summary:** {hebrew_trans}</div>"
+                display_text += f"\n\n---\n🇮🇱 **Hebrew Version:** {hebrew_trans}"
             
             with st.chat_message("assistant"):
                 st.markdown(display_text, unsafe_allow_html=True)
                 
-                # VOICE ROW
-                v_col1, v_col2 = st.columns(2)
-                if voice_mode:
+                if st.session_state.get('voice_mode'):
+                    v_col1, v_col2 = st.columns(2)
                     with v_col1:
                         try:
-                            # Note: gTTS will take a second to generate 2000 words!
-                            tts_en = gTTS(response[:3000], lang='en') # Capped at 3000 for voice stability
-                            en_fp = io.BytesIO()
-                            tts_en.write_to_fp(en_fp)
+                            # Speak up to 3000 chars of the English
+                            tts_en = gTTS(response[:3000], lang='en')
+                            en_fp = io.BytesIO(); tts_en.write_to_fp(en_fp)
                             st.audio(en_fp, format='audio/mp3')
-                            st.caption("🔊 English Audio (Full Stream)")
-                        except:
-                            st.warning("EN Voice Overload - Try a shorter prompt.")
+                        except: st.warning("EN Voice Error")
                     
-                    if hebrew_mode and hebrew_trans:
+                    if hebrew_trans:
                         with v_col2:
                             try:
-                                tts_he = gTTS(hebrew_trans, lang='iw') # Using 'iw' for Hebrew
-                                he_fp = io.BytesIO()
-                                tts_he.write_to_fp(he_fp)
+                                tts_he = gTTS(hebrew_trans, lang='iw')
+                                he_fp = io.BytesIO(); tts_he.write_to_fp(he_fp)
                                 st.audio(he_fp, format='audio/mp3')
-                                st.caption("🇮🇱 Hebrew Audio")
-                            except:
-                                st.warning("HE Voice Error")
+                            except: st.warning("HE Voice Error")
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
+            st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
