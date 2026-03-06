@@ -71,48 +71,28 @@ def load_fresh_data():
     if connection_status == "Online": return conn.read(ttl=0)
     return pd.DataFrame(columns=["question", "answer", "status", "timestamp"])
 
-#--------------------
-# Section 4: Sidebar - Access Control & Mode Switching
-#--------------------
 with st.sidebar:
-    st.title("🔐 Master Control")
+    st.title("⚙️ BDL Control Panel")
     
-    # Universal Input Box
-    admin_input = st.text_input("Admin Key", type="password")
-    
-    # 1. Check for the "speak" command toggle
-    if admin_input.lower().strip() == "speak":
-        st.session_state.is_speak_mode = True
-        st.session_state.is_admin = False
-        st.warning("🕵️ Neural Speak Mode: ACTIVE")
-        st.caption("Chat input will now be synthesized from memories.")
-        conf_level = 85 # Default for synthesis
+    # 1. Admin Key
+    admin_key = st.text_input("Admin Key", type="password")
+    st.session_state.is_admin = (admin_key == "YOUR_SECRET_KEY") # Replace with your key
+
+    # 2. Modes (Speak Mode is now an Admin feature)
+    if st.session_state.is_admin:
+        st.success("Admin Access Granted")
+        st.session_state.is_speak_mode = st.toggle("🗣️ Speak Mode (Internet Brain)")
         
-    # 2. Check for the standard admin password
-    elif admin_input == "admin123":
-        st.session_state.is_admin = True
-        st.session_state.is_speak_mode = False
-        st.markdown('<div class="pulse-container"><div class="pulse-circle"></div><span>ADMIN: ONLINE</span></div>', unsafe_allow_html=True)
-        st.markdown("---")
-        st.write("🧠 **Match Strictness**")
-        conf_level = st.slider("Strictness", 50, 100, 85)
-        
-    # 3. Default to User Mode
+        # Sport Mode only appears if Speak Mode is active
+        if st.session_state.is_speak_mode:
+            st.session_state.sport_mode = st.toggle("🏒 Sport Mode (NHL Specialist)")
     else:
-        st.session_state.is_admin = False
         st.session_state.is_speak_mode = False
-        st.info("User Mode Active")
-        conf_level = 85
-    
+        st.session_state.sport_mode = False
+
     st.markdown("---")
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
-    slang_mode = st.toggle("🧢 Slang Grammar Mode") # New Toggle
-    
-    if st.button("Clear Chat History"):
-        st.session_state.messages = []
-        st.rerun()
-    
    
 #--------------------
 # Section 5: Sidebar - Maintenance & Diagnostics
@@ -214,24 +194,24 @@ if prompt := st.chat_input("Communicate..."):
             except: pass
 
 #--------------------
-# Section 11: Logic - Knowledge & Summary Specialist
+# Section 11: Logic - Sport-Enhanced Brain
 #--------------------
         elif not response:
             current_df = load_fresh_data()
             
-            # --- CASE A: INTERNET-AUGMENTED SPEAK MODE ---
             if st.session_state.get('is_speak_mode'):
                 import wikipediaapi
                 wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
                 
-                # Check for the (summary) tag
-                wants_summary = "(summary)" in prompt.lower()
+                # Check for Summary tags or Sport Mode
+                wants_summary = "(summary)" in prompt.lower() or st.session_state.get('sport_mode')
+                
                 clean_query = prompt.lower().replace("(summary)", "")
-                for noise in ['what is', 'who is', 'tell me about', '?']:
-                    clean_query = clean_query.replace(noise, "")
-                clean_query = clean_query.strip()
+                # If Sport Mode is on, we add "NHL" to the search to be more precise
+                if st.session_state.get('sport_mode') and "nhl" not in clean_query:
+                    clean_query += " NHL hockey"
 
-                with st.status(f"🌐 BDL is fetching {'Summary' if wants_summary else 'Deep Data'}...", expanded=False) as status:
+                with st.status("🌐 BDL Internet Engine Active...", expanded=False) as status:
                     try:
                         import wikipedia
                         search_results = wikipedia.search(clean_query)
@@ -239,35 +219,30 @@ if prompt := st.chat_input("Communicate..."):
                             page = wiki_link.page(search_results[0])
                             if page.exists():
                                 if wants_summary:
-                                    # SUMMARY MODE: Only the first 1000 characters
-                                    response = f"### 📝 QUICK SUMMARY: {page.title}\n\n" + page.summary[:1000]
+                                    # NHL / SPORT MODE SUMMARY (Speed focus)
+                                    response = f"### 🏒 SPORT REPORT: {page.title}\n\n" + page.summary[:1200]
                                 else:
-                                    # DEEP MODE: Full page up to 15,000 characters
+                                    # DEEP SCAN (2,000+ words focus)
                                     response = f"### 📂 DEEP SCAN: {page.title}\n\n" + page.text[:15000]
-                                    response += "\n\n[--- END OF FULL DATA STREAM ---]"
                         
+                        # Web Search Fallback
                         if not response:
                             from googlesearch import search
                             res = list(search(prompt, num_results=1))
-                            response = f"I couldn't find a file, but here is a web link: {res[0]}"
+                            response = f"I found a live web source: {res[0]}"
                     except:
-                        response = "Connection timeout. The internet brain is sleepy."
+                        response = "The Internet Brain is currently offline."
 
-                    status.update(label=f"Scan Complete: {len(response)} chars found", state="complete")
+                    status.update(label="Knowledge Integrated!", state="complete")
 
             # --- CASE B: STANDARD USER MODE ---
             else:
-                # Fuzzy Match with 85% Strictness
+                # Regular fuzzy matching for non-admins
                 questions = current_df['question'].fillna('').tolist()
                 if questions:
                     match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
                     if score >= 85:
                         response = current_df[current_df['question'] == match].iloc[-1]['answer']
-
-            if not response:
-                response = "I haven't learned that yet. **What is the answer?**"
-                st.session_state.waiting_for_answer = True
-                st.session_state.last_question = prompt
 #--------------------
 # Section 12: Hebrew Translation (Always Available)
 #--------------------
@@ -311,5 +286,6 @@ if prompt := st.chat_input("Communicate..."):
             st.session_state.messages.append({"role": "assistant", "content": display_text})
 
             st.session_state.messages.append({"role": "assistant", "content": display_text})
+
 
 
