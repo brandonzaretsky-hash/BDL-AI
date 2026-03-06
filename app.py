@@ -98,7 +98,7 @@ with st.sidebar:
         new_entry = pd.DataFrame([{"question": q.lower(), "answer": a}])
         conn.update(worksheet="Memory", data=pd.concat([df, new_entry], ignore_index=True))
         st.success("⚡ Memory Saved Locally.")
-    except: 
+    except:
         st.error("Write failed. Check sheet structure.")
 
 def save_request(q, a):
@@ -112,7 +112,7 @@ def save_request(q, a):
             "timestamp": datetime.now().strftime("%H:%M")
         }])
         conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
-    except: 
+    except:
         st.error("Requests tab not found. Contact Super-Dev.")
 #-------------------
 #Section 4 Chat intercation and Logic Brain
@@ -219,4 +219,5 @@ if prompt := st.chat_input("Communicate..."):
                         except: st.warning("HE Voice Error")
         
         st.session_state.messages.append({"role": "assistant", "content": full_display})
+
 
