@@ -91,25 +91,29 @@ with st.sidebar:
 #-------------------
 #Section 3 Data logic Functions
 #-------------------
-    def save_direct(q, a):
+   def save_direct(q, a):
     """Direct Write for Super-Devs"""
     try:
         df = conn.read(worksheet="Memory", ttl="1s")
         new_entry = pd.DataFrame([{"question": q.lower(), "answer": a}])
         conn.update(worksheet="Memory", data=pd.concat([df, new_entry], ignore_index=True))
         st.success("⚡ Memory Saved Locally.")
-    except: st.error("Write failed. Check sheet structure.")
+    except: 
+        st.error("Write failed. Check sheet structure.")
 
 def save_request(q, a):
     """Approval Request for Standard Users"""
     try:
         df = conn.read(worksheet="Requests", ttl="1s")
         new_req = pd.DataFrame([{
-            "question": q.lower(), "answer": a, 
-            "user": "User", "timestamp": datetime.now().strftime("%H:%M")
+            "question": q.lower(), 
+            "answer": a, 
+            "user": "User", 
+            "timestamp": datetime.now().strftime("%H:%M")
         }])
         conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
-    except: st.error("Requests tab not found. Contact Super-Dev.")
+    except: 
+        st.error("Requests tab not found. Contact Super-Dev.")
 #-------------------
 #Section 4 Chat intercation and Logic Brain
 #-------------------
@@ -215,3 +219,4 @@ if prompt := st.chat_input("Communicate..."):
                         except: st.warning("HE Voice Error")
         
         st.session_state.messages.append({"role": "assistant", "content": full_display})
+
