@@ -129,96 +129,48 @@ if prompt := st.chat_input("Communicate..."):
     response = ""
     hebrew_trans = ""
 
-    # A. TEACHING MODE (The Write Logic)
+    # A. TEACHING MODE (Requesting Logic)
     if st.session_state.waiting_for_answer:
+        # Check roles for saving
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
             response = "⚡ Super-Dev: Data stored in main brain."
         else:
+            # THIS IS THE REQUEST PART: Saves to 'Requests' tab
             save_request(st.session_state.last_question, prompt)
             response = "📝 User: Answer sent for Admin approval."
         st.session_state.waiting_for_answer = False
 
-    # B. MATH CALCULATOR
-    elif re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-        try: response = f"🔢 **Result:** {pd.eval(prompt)}"
-        except: pass
-
-    # C. KNOWLEDGE ENGINE (The Read Logic)
+    # B. KNOWLEDGE ENGINE (Reading Logic)
     if not response:
-        # PATH 1: INTERNET (Super-Dev Speak Mode)
-        if st.session_state.get('is_speak_mode'):
-            import wikipedia
-            from googlesearch import search
-            wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
-            wikipedia.set_lang("en")
-            
-            wants_summary = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
-            CHAR_LIMIT = 1200 if wants_summary else 15000 
-            
-            clean_q = prompt.lower().replace("(summary)", "")
-            for noise in ['what is', 'who is', 'tell me about', '?']:
-                clean_q = clean_q.replace(noise, "")
-            
-            with st.status("🚀 Global Knowledge Scan...", expanded=False) as status:
-                try:
-                    s_results = wikipedia.search(clean_q.strip())
-                    if s_results:
-                        page = wiki_link.page(s_results[0])
-                        if page.exists():
-                            content = page.summary if wants_summary else page.text
-                            response = f"### 📂 DATA REPORT: {page.title}\n\n" + content[:CHAR_LIMIT]
-                            if not wants_summary: response += "\n\n[--- END OF DEEP SCAN ---]"
-                    if not response:
-                        res = list(search(prompt, num_results=1))
-                        if res: response = f"Web Result: {res[0]}"
-                except: response = "Internet brain timed out."
-                status.update(label="Complete!", state="complete")
-
-        # PATH 2: LOCAL MEMORY (Fuzzy Match with Slider)
-        if not response:
-            try:
-                main_df = conn.read(worksheet="Memory", ttl="1s")
-                questions = main_df['question'].fillna('').tolist()
-                match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                if score >= intel_level:
-                    response = main_df[main_df['question'] == match].iloc[-1]['answer']
+        # 1. First check if it's a Math problem
+        if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
+            try: response = f"🔢 **Result:** {pd.eval(prompt)}"
             except: pass
 
-    # D. FALLBACK (Trigger Learning)
+    if not response:
+        # 2. Local Memory Read (SPECIFY THE WORKSHEET)
+        try:
+            # WE MUST TELL IT TO READ 'Memory'
+            main_df = conn.read(worksheet="Memory", ttl="1s")
+            questions = main_df['question'].fillna('').tolist()
+            
+            # Use the Intelligence Slider
+            match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
+            
+            if score >= intel_level:
+                response = main_df[main_df['question'] == match].iloc[-1]['answer']
+        except Exception as e:
+            st.error(f"Read Error: {e}")
+
+    # C. FALLBACK (Trigger the Request)
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
         st.session_state.last_question = prompt
 
-    # E. HEBREW & VOICE PROCESSING
-    if hebrew_mode and response:
-        try:
-            hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:800])
-        except: pass
-
+    # D. OUTPUT
     if response:
-        full_display = response
-        if hebrew_trans:
-            full_display += f"\n\n---\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
-        
         with st.chat_message("assistant"):
-            st.markdown(full_display, unsafe_allow_html=True)
-            if voice_mode:
-                v1, v2 = st.columns(2)
-                with v1:
-                    try:
-                        t_en = gTTS(response[:3000], lang='en')
-                        f_en = io.BytesIO(); t_en.write_to_fp(f_en); st.audio(f_en)
-                    except: st.warning("EN Voice Error")
-                if hebrew_trans:
-                    with v2:
-                        try:
-                            t_he = gTTS(hebrew_trans, lang='iw')
-                            f_he = io.BytesIO(); t_he.write_to_fp(f_he); st.audio(f_he)
-                        except: st.warning("HE Voice Error")
-        
-        st.session_state.messages.append({"role": "assistant", "content": full_display})
-
-
-
+            st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
