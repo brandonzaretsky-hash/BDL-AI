@@ -10,9 +10,8 @@ from datetime import datetime
 #--------------------
 # Section 1: Setup, Styling, & Session State
 #--------------------
-st.set_page_config(page_title="BDL-ai V5.9 Master", layout="wide", page_icon="🤖")
+st.set_page_config(page_title="BDL-ai V6.0 Master", layout="wide", page_icon="🤖")
 
-# RTL and UI CSS
 st.markdown("""
     <style>
     .rtl-container { direction: rtl; text-align: right; font-family: 'Arial'; background-color: #1e1e1e; padding: 15px; border-radius: 10px; border: 1px solid #444; }
@@ -31,9 +30,8 @@ with st.sidebar:
     st.title("🛡️ BDL Access Control")
     access_key = st.text_input("Enter Access Key", type="password")
 
-    # ROLE DEFINITION
-    is_speak_role = (access_key == "qwerty") # Super-Dev
-    is_admin_role = (access_key == "admin") or is_speak_role # Admin
+    is_speak_role = (access_key == "qwerty") 
+    is_admin_role = (access_key == "admin") or is_speak_role 
     
     st.markdown("### 🛠️ Basic Controls")
     intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85)
@@ -45,7 +43,6 @@ with st.sidebar:
         st.markdown("### 👮 Admin Tools")
         sport_mode = st.toggle("🏒 Sport Mode")
         
-        # Admin Approval Interface
         conn = st.connection("gsheets", type=GSheetsConnection)
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
@@ -62,13 +59,11 @@ with st.sidebar:
                     st.rerun()
         except: st.warning("⚠️ 'Requests' tab missing.")
 
-    # ONLY SUPER-DEV SEES OR USES SPEAK MODE
     if is_speak_role:
         st.markdown("---")
         st.markdown("### ⚡ Super-User")
-        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan (Speak Mode)", value=True)
+        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan", value=True)
     else:
-        # Force Speak Mode OFF for everyone else
         st.session_state.is_speak_mode = False
 
     if st.button("🗑️ Clear Chat History"):
@@ -145,10 +140,8 @@ def run_internet_scan(query, summarize=False):
     wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
     wikipedia.set_lang("en")
     limit = 1200 if summarize else 15000
-    
     clean_q = query.lower().replace("(summary)", "")
     for n in ['what is', 'who is', '?']: clean_q = clean_q.replace(n, "")
-    
     try:
         s_results = wikipedia.search(clean_q.strip())
         if s_results:
@@ -156,8 +149,7 @@ def run_internet_scan(query, summarize=False):
             if page.exists():
                 content = page.summary if summarize else page.text
                 return f"### 📂 DATA REPORT: {page.title}\n\n" + content[:limit]
-    except:
-        return None
+    except: return None
     return None
 
 #--------------------
@@ -171,8 +163,7 @@ def read_local_memory(prompt, threshold):
             match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
             if score >= threshold:
                 return df[df['question'] == match].iloc[-1]['answer']
-    except:
-        return None
+    except: return None
     return None
 
 #--------------------
@@ -181,56 +172,71 @@ def read_local_memory(prompt, threshold):
 if prompt := st.chat_input("Communicate with BDL..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
-
     response = ""
     hebrew_trans = ""
 
-    # A. TEACHING MODE
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Data saved to Main Memory."
+            response = "⚡ **Super-Dev Override:** Data saved."
         else:
             save_request(st.session_state.last_question, prompt)
             response = "📝 **Lesson Logged:** Sent for Admin approval."
         st.session_state.waiting_for_answer = False
 
-    # B. MATH CHECK
-    if not response:
-        response = run_math(prompt)
+    if not response: response = run_math(prompt)
 
-    # C. HANDS-BRAIN (Internet & Sport Mode - RESTRICTED TO SUPER-DEV)
-    # Even if sport_mode is on, it only searches if is_speak_role is True
     if not response and st.session_state.get('is_speak_mode') and is_speak_role:
         with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
-            # Admins can toggle Sport Mode, but Super-Dev must be logged in to run the scan
             summ = "(summary)" in prompt.lower() or sport_mode
             response = run_internet_scan(prompt, summarize=summ)
             status.update(label="Global Scan Complete!", state="complete")
 
-    # D. LOCAL BRAIN (Memory Read)
-    if not response:
-        response = read_local_memory(prompt, intel_level)
+    if not response: response = read_local_memory(prompt, intel_level)
 
-    # E. FALLBACK
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
         st.session_state.last_question = prompt
 
-    # F. FINAL OUTPUT
     if response:
         if hebrew_mode and "Result:" not in response:
             hebrew_trans = get_hebrew(response)
-
         full_display = response
-        if hebrew_trans:
-            full_display += f"\n\n---\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
-
+        if hebrew_trans: full_display += f"\n\n---\n<div class='rtl-container'>🇮🇱 {hebrew_trans}</div>"
         with st.chat_message("assistant"):
             st.markdown(full_display, unsafe_allow_html=True)
-            if voice_mode:
-                show_dual_voice(response, hebrew_trans)
-        
+            if voice_mode: show_dual_voice(response, hebrew_trans)
         st.session_state.messages.append({"role": "assistant", "content": full_display})
 
+#--------------------
+# Section 12: Testing & System Diagnostics
+#--------------------
+if is_speak_role:
+    with st.sidebar:
+        st.markdown("---")
+        if st.button("🧪 Run Full System Test"):
+            with st.expander("🔎 Diagnostic Results", expanded=True):
+                # 1. Math Test
+                m_res = run_math("2 + 2")
+                st.write(f"🔢 Math Engine: {'✅ PASS' if m_res == '🔢 **Result:** 4' else '❌ FAIL'}")
+                
+                # 2. Translation Test
+                t_res = get_hebrew("Hello")
+                st.write(f"🇮🇱 Translation: {'✅ PASS' if t_res else '❌ FAIL'}")
+                
+                # 3. Voice Test
+                v_res = play_voice("Test", "en")
+                st.write(f"🔊 Voice Engine: {'✅ PASS' if v_res else '❌ FAIL'}")
+                
+                # 4. Sheet Connectivity
+                try:
+                    conn.read(worksheet="Memory", ttl="1s")
+                    st.write("📊 GSheets (Memory): ✅ PASS")
+                except: st.write("📊 GSheets (Memory): ❌ FAIL")
+                
+                # 5. Hands-Brain Test
+                h_res = run_internet_scan("Python Programming", summarize=True)
+                st.write(f"🌐 Hands-Brain: {'✅ PASS' if h_res else '❌ FAIL'}")
+                
+                st.success("Diagnostics Complete.")
