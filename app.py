@@ -31,8 +31,9 @@ with st.sidebar:
     st.title("🛡️ BDL Access Control")
     access_key = st.text_input("Enter Access Key", type="password")
 
-    is_speak_role = (access_key == "qwerty") 
-    is_admin_role = (access_key == "admin") or is_speak_role 
+    # ROLE DEFINITION
+    is_speak_role = (access_key == "qwerty") # Super-Dev
+    is_admin_role = (access_key == "admin") or is_speak_role # Admin
     
     st.markdown("### 🛠️ Basic Controls")
     intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85)
@@ -44,6 +45,7 @@ with st.sidebar:
         st.markdown("### 👮 Admin Tools")
         sport_mode = st.toggle("🏒 Sport Mode")
         
+        # Admin Approval Interface
         conn = st.connection("gsheets", type=GSheetsConnection)
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
@@ -60,11 +62,13 @@ with st.sidebar:
                     st.rerun()
         except: st.warning("⚠️ 'Requests' tab missing.")
 
+    # ONLY SUPER-DEV SEES OR USES SPEAK MODE
     if is_speak_role:
         st.markdown("---")
         st.markdown("### ⚡ Super-User")
-        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan", value=True)
+        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan (Speak Mode)", value=True)
     else:
+        # Force Speak Mode OFF for everyone else
         st.session_state.is_speak_mode = False
 
     if st.button("🗑️ Clear Chat History"):
@@ -185,7 +189,7 @@ if prompt := st.chat_input("Communicate with BDL..."):
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Data saved."
+            response = "⚡ **Super-Dev Override:** Data saved to Main Memory."
         else:
             save_request(st.session_state.last_question, prompt)
             response = "📝 **Lesson Logged:** Sent for Admin approval."
@@ -195,10 +199,12 @@ if prompt := st.chat_input("Communicate with BDL..."):
     if not response:
         response = run_math(prompt)
 
-    # C. HANDS-BRAIN (Internet & Sport Mode)
-    if not response and st.session_state.get('is_speak_mode'):
+    # C. HANDS-BRAIN (Internet & Sport Mode - RESTRICTED TO SUPER-DEV)
+    # Even if sport_mode is on, it only searches if is_speak_role is True
+    if not response and st.session_state.get('is_speak_mode') and is_speak_role:
         with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
-            summ = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
+            # Admins can toggle Sport Mode, but Super-Dev must be logged in to run the scan
+            summ = "(summary)" in prompt.lower() or sport_mode
             response = run_internet_scan(prompt, summarize=summ)
             status.update(label="Global Scan Complete!", state="complete")
 
@@ -227,3 +233,4 @@ if prompt := st.chat_input("Communicate with BDL..."):
                 show_dual_voice(response, hebrew_trans)
         
         st.session_state.messages.append({"role": "assistant", "content": full_display})
+
