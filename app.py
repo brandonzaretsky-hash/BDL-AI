@@ -7,10 +7,12 @@ from gtts import gTTS
 import io, re, wikipedia, wikipediaapi
 from datetime import datetime
 
-# --- UI Configuration ---
-st.set_page_config(page_title="BDL-ai V5.6 Master", layout="wide", page_icon="🤖")
+#--------------------
+# Section 1: Setup, Styling, & Session State
+#--------------------
+st.set_page_config(page_title="BDL-ai V5.9 Master", layout="wide", page_icon="🤖")
 
-# Right-to-Left Support for Hebrew and UI Styling
+# RTL and UI CSS
 st.markdown("""
     <style>
     .rtl-container { direction: rtl; text-align: right; font-family: 'Arial'; background-color: #1e1e1e; padding: 15px; border-radius: 10px; border: 1px solid #444; }
@@ -18,200 +20,202 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize Session States
 if "messages" not in st.session_state: st.session_state.messages = []
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
+
 #--------------------
-#Section 2 Sidebar Securaty
+# Section 2: Sidebar Security & Role Access
 #--------------------
 with st.sidebar:
     st.title("🛡️ BDL Access Control")
     access_key = st.text_input("Enter Access Key", type="password")
 
-    # ROLE IDENTIFICATION
-    # Super-Dev (Internet/Direct Write): qwerty
-    # Admin (Approval/Sport): admin
-    is_speak_role = (access_key == "qwerty")
-    is_admin_role = (access_key == "admin") or is_speak_role
+    is_speak_role = (access_key == "qwerty") 
+    is_admin_role = (access_key == "admin") or is_speak_role 
     
-    # --- LEVEL 1: USER CONTROLS (Always Visible) ---
     st.markdown("### 🛠️ Basic Controls")
-    intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85, help="Controls matching strictness.")
+    intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85)
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
-    if st.button("🗑️ Clear Chat History"):
-        st.session_state.messages = []
-        st.rerun()
-
-    # --- LEVEL 2: ADMIN PANEL (admin or qwerty) ---
+    
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin & Approvals")
-        sport_mode = st.toggle("🏒 Sport Mode", help="Summarizes NHL/Sports data.")
+        st.markdown("### 👮 Admin Tools")
+        sport_mode = st.toggle("🏒 Sport Mode")
         
-        # Connect to Sheets for Approval Logic
         conn = st.connection("gsheets", type=GSheetsConnection)
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
             if not pending_df.empty:
                 st.dataframe(pending_df)
-                req_idx = st.number_input("Select Row ID", 0, len(pending_df)-1, 0)
-                if st.button("✅ Approve & Move to Memory"):
+                req_idx = st.number_input("ID to Approve", 0, len(pending_df)-1, 0)
+                if st.button("✅ Approve Lesson"):
                     main_mem = conn.read(worksheet="Memory", ttl="1s")
-                    approved_row = pending_df.iloc[[req_idx]][['question', 'answer']]
-                    updated_main = pd.concat([main_mem, approved_row], ignore_index=True)
+                    approved = pending_df.iloc[[req_idx]][['question', 'answer']]
+                    updated_main = pd.concat([main_mem, approved], ignore_index=True)
                     conn.update(worksheet="Memory", data=updated_main)
-                    # Clean the request
-                    new_pending = pending_df.drop(pending_df.index[req_idx])
-                    conn.update(worksheet="Requests", data=new_pending)
-                    st.success("Lesson Authorized!")
+                    conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
+                    st.success("Authorized!")
                     st.rerun()
-            else: st.caption("No pending requests.")
-        except: st.warning("⚠️ 'Requests' tab missing in Google Sheets.")
+        except: st.warning("⚠️ 'Requests' tab missing.")
 
-    # --- LEVEL 3: SUPER-DEV TOOLS (qwerty Only) ---
     if is_speak_role:
         st.markdown("---")
-        st.markdown("### ⚡ Super-User Tools")
+        st.markdown("### ⚡ Super-User")
         st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan", value=True)
-        
-        if st.button("🩺 Run Sheet Doctor"):
-            st.info("🔍 Diagnostic: 'Memory' and 'Requests' tabs must exist.")
-            try:
-                m_check = conn.read(worksheet="Memory", ttl="1s")
-                st.write("✅ Memory Tab: OK")
-            except: st.write("❌ Memory Tab: MISSING")
-            try:
-                r_check = conn.read(worksheet="Requests", ttl="1s")
-                st.write("✅ Requests Tab: OK")
-            except: st.write("❌ Requests Tab: MISSING")
     else:
         st.session_state.is_speak_mode = False
-#-------------------
-#Section 3 Data logic Functions
-#-------------------
+
+    if st.button("🗑️ Clear Chat History"):
+        st.session_state.messages = []
+        st.rerun()
+
+#--------------------
+# Section 3: Data Write Functions
+#--------------------
 def save_direct(q, a):
-    """Direct Write for Super-Devs"""
-    try:
-        df = conn.read(worksheet="Memory", ttl="1s")
-        new_entry = pd.DataFrame([{"question": q.lower(), "answer": a}])
-        conn.update(worksheet="Memory", data=pd.concat([df, new_entry], ignore_index=True))
-        st.success("⚡ Memory Saved Locally.")
-    except:
-        st.error("Write failed. Check sheet structure.")
+    df = conn.read(worksheet="Memory", ttl="1s")
+    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
+    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
 
 def save_request(q, a):
-    """Approval Request for Standard Users"""
-    try:
-        df = conn.read(worksheet="Requests", ttl="1s")
-        new_req = pd.DataFrame([{
-            "question": q.lower(), 
-            "answer": a, 
-            "user": "User", 
-            "timestamp": datetime.now().strftime("%H:%M")
-        }])
-        conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
-    except:
-        st.error("Requests tab not found. Contact Super-Dev.")
-#-------------------
-#Section 4 Chat intercation and Logic Brain
-#-------------------
-# Display Message History
+    df = conn.read(worksheet="Requests", ttl="1s")
+    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
+    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
+
+#--------------------
+# Section 4: Chat History Display
+#--------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
 
+#--------------------
+# Section 5: Math Engine (Pre-Logic)
+#--------------------
+def run_math(prompt):
+    if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
+        try: return f"🔢 **Result:** {pd.eval(prompt)}"
+        except: return None
+    return None
+
+#--------------------
+# Section 6: Translation Engine
+#--------------------
+def get_hebrew(text):
+    try:
+        return GoogleTranslator(source='auto', target='iw').translate(text[:800])
+    except:
+        return None
+
+#--------------------
+# Section 7: Voice Generation Engine
+#--------------------
+def play_voice(text, lang_code):
+    try:
+        tts = gTTS(text[:3000], lang=lang_code)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        return fp
+    except:
+        return None
+
+#--------------------
+# Section 8: UI Layout Helpers
+#--------------------
+def show_dual_voice(en_text, he_text):
+    v1, v2 = st.columns(2)
+    with v1:
+        en_fp = play_voice(en_text, 'en')
+        if en_fp: st.audio(en_fp)
+    if he_text:
+        with v2:
+            he_fp = play_voice(he_text, 'iw')
+            if he_fp: st.audio(he_fp)
+
+#--------------------
+# Section 9: Internet Search Brain
+#--------------------
+def run_internet_scan(query, summarize=False):
+    wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
+    wikipedia.set_lang("en")
+    limit = 1200 if summarize else 15000
+    
+    clean_q = query.lower().replace("(summary)", "")
+    for n in ['what is', 'who is', '?']: clean_q = clean_q.replace(n, "")
+    
+    try:
+        s_results = wikipedia.search(clean_q.strip())
+        if s_results:
+            page = wiki_link.page(s_results[0])
+            if page.exists():
+                content = page.summary if summarize else page.text
+                return f"### 📂 DATA REPORT: {page.title}\n\n" + content[:limit]
+    except:
+        return None
+    return None
+
+#--------------------
+# Section 10: Local Memory Brain
+#--------------------
+def read_local_memory(prompt, threshold):
+    try:
+        df = conn.read(worksheet="Memory", ttl="1s")
+        qs = df['question'].fillna('').tolist()
+        if qs:
+            match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
+            if score >= threshold:
+                return df[df['question'] == match].iloc[-1]['answer']
+    except:
+        return None
+    return None
+
+#--------------------
+# Section 11: Logic - Sports and Hands-Brain
+#--------------------
 if prompt := st.chat_input("Communicate with BDL..."):
-    # 1. Record the User's Message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     response = ""
     hebrew_trans = ""
 
-    # --- PHASE A: THE TEACHING & REQUEST SYSTEM ---
-    # This runs if the bot asked "What is the answer?" in the previous turn
-    if st.session_state.get('waiting_for_answer'):
+    # A. TEACHING MODE
+    if st.session_state.waiting_for_answer:
         if is_speak_role:
-            # Super-Dev saves instantly to 'Memory'
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Permanent memory updated in 'Memory' tab."
+            response = "⚡ **Super-Dev Override:** Data saved."
         else:
-            # Standard User saves to 'Requests' for Admin approval
             save_request(st.session_state.last_question, prompt)
-            response = "📝 **Lesson Logged:** Your answer has been sent to the 'Requests' tab for Admin approval."
-        
-        # Reset the state so we can go back to normal chatting
+            response = "📝 **Lesson Logged:** Sent for Admin approval."
         st.session_state.waiting_for_answer = False
 
-    # --- PHASE B: THE KNOWLEDGE RETRIEVAL SYSTEM ---
+    # B. MATH CHECK
     if not response:
-        # 1. Priority 1: Math Calculator
-        if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
-            try:
-                response = f"🔢 **Result:** {pd.eval(prompt)}"
-            except: pass
+        response = run_math(prompt)
 
-        # 2. Priority 2: Internet Brain (Only if Speak Mode Toggle is ON)
-        if not response and st.session_state.get('is_speak_mode'):
-            import wikipedia
-            import wikipediaapi
-            from googlesearch import search
-            
-            wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
-            wikipedia.set_lang("en")
-            
-            wants_summary = "(summary)" in prompt.lower() or st.session_state.get('sport_mode', False)
-            CHAR_LIMIT = 1200 if wants_summary else 15000 
-            
-            clean_q = prompt.lower().replace("(summary)", "")
-            for noise in ['what is', 'who is', 'tell me about', '?']:
-                clean_q = clean_q.replace(noise, "")
-            
-            with st.status("🚀 Global Knowledge Scan...", expanded=False) as status:
-                try:
-                    s_results = wikipedia.search(clean_q.strip())
-                    if s_results:
-                        page = wiki_link.page(s_results[0])
-                        if page.exists():
-                            content = page.summary if wants_summary else page.text
-                            response = f"### 📂 ONLINE REPORT: {page.title}\n\n" + content[:CHAR_LIMIT]
-                except:
-                    response = "Internet connection lost."
-                status.update(label="Scan Complete", state="complete")
+    # C. HANDS-BRAIN (Internet & Sport Mode)
+    if not response and st.session_state.get('is_speak_mode'):
+        with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
+            summ = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
+            response = run_internet_scan(prompt, summarize=summ)
+            status.update(label="Global Scan Complete!", state="complete")
 
-        # 3. Priority 3: Local Memory (The Google Sheet)
-        if not response:
-            try:
-                # Force-target the 'Memory' worksheet
-                main_df = conn.read(worksheet="Memory", ttl="1s")
-                questions = main_df['question'].fillna('').tolist()
-                
-                if questions:
-                    # Apply Fuzzy Matching via the Intelligence Slider
-                    match, score = process.extractOne(prompt, questions, scorer=fuzz.token_sort_ratio)
-                    
-                    if score >= intel_level:
-                        response = main_df[main_df['question'] == match].iloc[-1]['answer']
-            except Exception as e:
-                st.error(f"Sheet Read Error: {e}")
+    # D. LOCAL BRAIN (Memory Read)
+    if not response:
+        response = read_local_memory(prompt, intel_level)
 
-    # --- PHASE C: THE FALLBACK (Trigger the Request Sequence) ---
-    # If no response was found in Math, Internet, or Local Memory
+    # E. FALLBACK
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
         st.session_state.last_question = prompt
 
-    # --- PHASE D: OUTPUT & MULTIMODAL GENERATION ---
+    # F. FINAL OUTPUT
     if response:
-        # Translate to Hebrew if toggled
         if hebrew_mode and "Result:" not in response:
-            try:
-                hebrew_trans = GoogleTranslator(source='auto', target='iw').translate(response[:800])
-            except: pass
+            hebrew_trans = get_hebrew(response)
 
         full_display = response
         if hebrew_trans:
@@ -219,22 +223,7 @@ if prompt := st.chat_input("Communicate with BDL..."):
 
         with st.chat_message("assistant"):
             st.markdown(full_display, unsafe_allow_html=True)
-            
-            # Dual-Voice Engine (English & Hebrew)
             if voice_mode:
-                v_col1, v_col2 = st.columns(2)
-                with v_col1:
-                    try:
-                        tts_en = gTTS(response[:3000], lang='en')
-                        f_en = io.BytesIO(); tts_en.write_to_fp(f_en); st.audio(f_en)
-                    except: st.warning("EN Voice Error")
-                if hebrew_trans:
-                    with v_col2:
-                        try:
-                            tts_he = gTTS(hebrew_trans, lang='iw')
-                            f_he = io.BytesIO(); t_he.write_to_fp(f_he); st.audio(f_he)
-                        except: st.warning("HE Voice Error")
-            
+                show_dual_voice(response, hebrew_trans)
+        
         st.session_state.messages.append({"role": "assistant", "content": full_display})
-        st.session_state.messages.append({"role": "assistant", "content": response})
-
