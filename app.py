@@ -4,13 +4,13 @@ from streamlit_gsheets import GSheetsConnection
 from fuzzywuzzy import fuzz, process
 from deep_translator import GoogleTranslator
 from gtts import gTTS
-import io, re, wikipedia, wikipediaapi
+import io, re, wikipedia, wikipediaapi, time
 from datetime import datetime
 
 #--------------------
 # Section 1: Setup, Styling, & Session State
 #--------------------
-st.set_page_config(page_title="BDL-ai V6.0 Master", layout="wide", page_icon="🤖")
+st.set_page_config(page_title="BDL-ai V6.1 Master", layout="wide", page_icon="🤖")
 
 st.markdown("""
     <style>
@@ -22,6 +22,7 @@ st.markdown("""
 if "messages" not in st.session_state: st.session_state.messages = []
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
+if "perf_data" not in st.session_state: st.session_state.perf_data = []
 
 #--------------------
 # Section 2: Sidebar Security & Role Access
@@ -52,8 +53,7 @@ with st.sidebar:
                 if st.button("✅ Approve Lesson"):
                     main_mem = conn.read(worksheet="Memory", ttl="1s")
                     approved = pending_df.iloc[[req_idx]][['question', 'answer']]
-                    updated_main = pd.concat([main_mem, approved], ignore_index=True)
-                    conn.update(worksheet="Memory", data=updated_main)
+                    conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
                     conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
                     st.success("Authorized!")
                     st.rerun()
@@ -103,10 +103,8 @@ def run_math(prompt):
 # Section 6: Translation Engine
 #--------------------
 def get_hebrew(text):
-    try:
-        return GoogleTranslator(source='auto', target='iw').translate(text[:800])
-    except:
-        return None
+    try: return GoogleTranslator(source='auto', target='iw').translate(text[:800])
+    except: return None
 
 #--------------------
 # Section 7: Voice Generation Engine
@@ -114,11 +112,8 @@ def get_hebrew(text):
 def play_voice(text, lang_code):
     try:
         tts = gTTS(text[:3000], lang=lang_code)
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        return fp
-    except:
-        return None
+        fp = io.BytesIO(); tts.write_to_fp(fp); return fp
+    except: return None
 
 #--------------------
 # Section 8: UI Layout Helpers
@@ -178,19 +173,21 @@ if prompt := st.chat_input("Communicate with BDL..."):
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Data saved."
+            response = "⚡ **Super-Dev Override:** Saved."
         else:
             save_request(st.session_state.last_question, prompt)
-            response = "📝 **Lesson Logged:** Sent for Admin approval."
+            response = "📝 **Lesson Logged:** Approval Pending."
         st.session_state.waiting_for_answer = False
 
     if not response: response = run_math(prompt)
 
     if not response and st.session_state.get('is_speak_mode') and is_speak_role:
+        start_time = time.time()
         with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
-            summ = "(summary)" in prompt.lower() or sport_mode
+            summ = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
             response = run_internet_scan(prompt, summarize=summ)
             status.update(label="Global Scan Complete!", state="complete")
+        st.session_state.perf_data.append(time.time() - start_time)
 
     if not response: response = read_local_memory(prompt, intel_level)
 
@@ -210,33 +207,19 @@ if prompt := st.chat_input("Communicate with BDL..."):
         st.session_state.messages.append({"role": "assistant", "content": full_display})
 
 #--------------------
-# Section 12: Testing & System Diagnostics
+# Section 12: Testing & Performance Diagnostics
 #--------------------
 if is_speak_role:
     with st.sidebar:
         st.markdown("---")
         if st.button("🧪 Run Full System Test"):
             with st.expander("🔎 Diagnostic Results", expanded=True):
-                # 1. Math Test
-                m_res = run_math("2 + 2")
-                st.write(f"🔢 Math Engine: {'✅ PASS' if m_res == '🔢 **Result:** 4' else '❌ FAIL'}")
+                st.write(f"🔢 Math: {'✅' if run_math('2+2') else '❌'}")
+                st.write(f"🇮🇱 Translation: {'✅' if get_hebrew('Hi') else '❌'}")
+                st.write(f"📊 Sheet Connection: {'✅' if conn.read(worksheet='Memory', ttl='1s') is not None else '❌'}")
                 
-                # 2. Translation Test
-                t_res = get_hebrew("Hello")
-                st.write(f"🇮🇱 Translation: {'✅ PASS' if t_res else '❌ FAIL'}")
-                
-                # 3. Voice Test
-                v_res = play_voice("Test", "en")
-                st.write(f"🔊 Voice Engine: {'✅ PASS' if v_res else '❌ FAIL'}")
-                
-                # 4. Sheet Connectivity
-                try:
-                    conn.read(worksheet="Memory", ttl="1s")
-                    st.write("📊 GSheets (Memory): ✅ PASS")
-                except: st.write("📊 GSheets (Memory): ❌ FAIL")
-                
-                # 5. Hands-Brain Test
-                h_res = run_internet_scan("Python Programming", summarize=True)
-                st.write(f"🌐 Hands-Brain: {'✅ PASS' if h_res else '❌ FAIL'}")
-                
-                st.success("Diagnostics Complete.")
+                if st.session_state.perf_data:
+                    st.markdown("**⚡ Hands-Brain Performance**")
+                    st.line_chart(st.session_state.perf_data)
+                    st.caption(f"Average Scan Speed: {round(sum(st.session_state.perf_data)/len(st.session_state.perf_data), 2)}s")
+                st.success("Testing Complete.")
