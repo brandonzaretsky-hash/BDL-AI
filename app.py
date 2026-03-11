@@ -10,7 +10,7 @@ from datetime import datetime
 #--------------------
 # Section 1: Setup, Styling, & Session State
 #--------------------
-st.set_page_config(page_title="BDL-ai V6.1 Master", layout="wide", page_icon="🤖")
+st.set_page_config(page_title="BDL-ai V6.2 Master", layout="wide", page_icon="🤖")
 
 st.markdown("""
     <style>
@@ -31,29 +31,31 @@ with st.sidebar:
     st.title("🛡️ BDL Access Control")
     access_key = st.text_input("Enter Access Key", type="password")
 
-    is_speak_role = (access_key == "qwerty") 
-    is_admin_role = (access_key == "admin") or is_speak_role 
+    is_speak_role = (access_key == "qwerty") # Super-Dev
+    is_admin_role = (access_key == "admin") or is_speak_role # Admin
     
     st.markdown("### 🛠️ Basic Controls")
     intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85)
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
     
+    conn = st.connection("gsheets", type=GSheetsConnection)
+
     if is_admin_role:
         st.markdown("---")
         st.markdown("### 👮 Admin Tools")
         sport_mode = st.toggle("🏒 Sport Mode")
         
-        conn = st.connection("gsheets", type=GSheetsConnection)
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
             if not pending_df.empty:
-                st.dataframe(pending_df)
+                st.markdown("**Pending Approvals:**")
+                st.dataframe(pending_df, use_container_width=True)
                 req_idx = st.number_input("ID to Approve", 0, len(pending_df)-1, 0)
-                if st.button("✅ Approve Lesson"):
+                if st.button("✅ Approve Selected"):
                     main_mem = conn.read(worksheet="Memory", ttl="1s")
-                    approved = pending_df.iloc[[req_idx]][['question', 'answer']]
-                    conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
+                    approved_row = pending_df.iloc[[req_idx]][['question', 'answer']]
+                    conn.update(worksheet="Memory", data=pd.concat([main_mem, approved_row], ignore_index=True))
                     conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
                     st.success("Authorized!")
                     st.rerun()
@@ -71,17 +73,30 @@ with st.sidebar:
         st.rerun()
 
 #--------------------
-# Section 3: Data Write Functions
+# Section 3: Data Write Functions (THE CORE)
 #--------------------
 def save_direct(q, a):
-    df = conn.read(worksheet="Memory", ttl="1s")
-    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
-    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
+    """Bypasses approval - Only for Super-Devs"""
+    try:
+        df = conn.read(worksheet="Memory", ttl="1s")
+        new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
+        conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
+        st.toast("⚡ Memory Updated")
+    except: st.error("Write Error: Check Sheet Columns")
 
 def save_request(q, a):
-    df = conn.read(worksheet="Requests", ttl="1s")
-    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
-    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
+    """Sends to Requests tab for Admin review"""
+    try:
+        df = conn.read(worksheet="Requests", ttl="1s")
+        new_req = pd.DataFrame([{
+            "question": q.lower(), 
+            "answer": a, 
+            "user": "External", 
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }])
+        conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
+        st.toast("📝 Request Logged")
+    except: st.error("Request Error: Check 'Requests' Tab")
 
 #--------------------
 # Section 4: Chat History Display
@@ -91,7 +106,7 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"], unsafe_allow_html=True)
 
 #--------------------
-# Section 5: Math Engine (Pre-Logic)
+# Section 5: Math Engine
 #--------------------
 def run_math(prompt):
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", prompt.strip()):
@@ -148,10 +163,11 @@ def run_internet_scan(query, summarize=False):
     return None
 
 #--------------------
-# Section 10: Local Memory Brain
+# Section 10: Local Memory Brain (READ ONLY)
 #--------------------
 def read_local_memory(prompt, threshold):
     try:
+        # Bot ONLY reads from the 'Memory' tab
         df = conn.read(worksheet="Memory", ttl="1s")
         qs = df['question'].fillna('').tolist()
         if qs:
@@ -170,32 +186,38 @@ if prompt := st.chat_input("Communicate with BDL..."):
     response = ""
     hebrew_trans = ""
 
+    # A. TEACHING MODE (Triggered by Phase E)
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Saved."
+            response = "⚡ **Super-Dev Override:** Memory Locked."
         else:
             save_request(st.session_state.last_question, prompt)
-            response = "📝 **Lesson Logged:** Approval Pending."
+            response = "📝 **System Logged:** Requesting Admin validation."
         st.session_state.waiting_for_answer = False
 
+    # B. MATH CHECK
     if not response: response = run_math(prompt)
 
+    # C. HANDS-BRAIN (Internet - Restricted to Super-Dev)
     if not response and st.session_state.get('is_speak_mode') and is_speak_role:
         start_time = time.time()
         with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
-            summ = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
+            summ = "(summary)" in prompt.lower() or sport_mode
             response = run_internet_scan(prompt, summarize=summ)
             status.update(label="Global Scan Complete!", state="complete")
         st.session_state.perf_data.append(time.time() - start_time)
 
+    # D. LOCAL BRAIN (Memory Read)
     if not response: response = read_local_memory(prompt, intel_level)
 
+    # E. FALLBACK (Trigger the 'Teach' Cycle)
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
         st.session_state.last_question = prompt
 
+    # F. FINAL OUTPUT
     if response:
         if hebrew_mode and "Result:" not in response:
             hebrew_trans = get_hebrew(response)
@@ -214,12 +236,9 @@ if is_speak_role:
         st.markdown("---")
         if st.button("🧪 Run Full System Test"):
             with st.expander("🔎 Diagnostic Results", expanded=True):
-                st.write(f"🔢 Math: {'✅' if run_math('2+2') else '❌'}")
-                st.write(f"🇮🇱 Translation: {'✅' if get_hebrew('Hi') else '❌'}")
-                st.write(f"📊 Sheet Connection: {'✅' if conn.read(worksheet='Memory', ttl='1s') is not None else '❌'}")
-                
+                st.write(f"🔢 Math: {'✅' if run_math('5+5') else '❌'}")
+                st.write(f"🇮🇱 Translation: {'✅' if get_hebrew('Test') else '❌'}")
                 if st.session_state.perf_data:
-                    st.markdown("**⚡ Hands-Brain Performance**")
                     st.line_chart(st.session_state.perf_data)
-                    st.caption(f"Average Scan Speed: {round(sum(st.session_state.perf_data)/len(st.session_state.perf_data), 2)}s")
-                st.success("Testing Complete.")
+                    st.caption(f"Average Speed: {round(sum(st.session_state.perf_data)/len(st.session_state.perf_data), 2)}s")
+                st.success("Diagnostics Complete.")
