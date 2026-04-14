@@ -10,7 +10,7 @@ from datetime import datetime
 #--------------------
 # Section 1: Setup, Styling, & Session State
 #--------------------
-st.set_page_config(page_title="BDL-ai V6.2 Master", layout="wide", page_icon="🤖")
+st.set_page_config(page_title="BDL-ai V6.3 Master", layout="wide", page_icon="🤖")
 
 st.markdown("""
     <style>
@@ -23,18 +23,21 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
 if "perf_data" not in st.session_state: st.session_state.perf_data = []
+if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
 
 #--------------------
-# Section 2: Sidebar Security & Role Access
+# Section 2: Sidebar Security & Universal Controls
 #--------------------
 with st.sidebar:
-    st.title("🛡️ BDL Access Control")
+    st.title("🛡️ BDL Security & Deepthink")
     access_key = st.text_input("Enter Access Key", type="password")
 
     is_speak_role = (access_key == "qwerty") # Super-Dev
     is_admin_role = (access_key == "admin") or is_speak_role # Admin
     
-    st.markdown("### 🛠️ Basic Controls")
+    st.markdown("### 🛠️ Global Settings")
+    # DEEPTHINK IS NOW FOR EVERYONE
+    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode (Internet)", value=False)
     intel_level = st.slider("🧠 Intelligence Level", 50, 100, 85)
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
@@ -43,64 +46,57 @@ with st.sidebar:
 
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin Tools")
+        st.markdown("### 👮 Admin & Approval")
         sport_mode = st.toggle("🏒 Sport Mode")
         
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
             if not pending_df.empty:
-                st.markdown("**Pending Approvals:**")
                 st.dataframe(pending_df, use_container_width=True)
                 req_idx = st.number_input("ID to Approve", 0, len(pending_df)-1, 0)
-                if st.button("✅ Approve Selected"):
+                if st.button("✅ Approve for All Users"):
                     main_mem = conn.read(worksheet="Memory", ttl="1s")
                     approved_row = pending_df.iloc[[req_idx]][['question', 'answer']]
                     conn.update(worksheet="Memory", data=pd.concat([main_mem, approved_row], ignore_index=True))
                     conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                    st.success("Authorized!")
+                    st.success("Global Update Pushed!")
                     st.rerun()
         except: st.warning("⚠️ 'Requests' tab missing.")
 
-    if is_speak_role:
-        st.markdown("---")
-        st.markdown("### ⚡ Super-User")
-        st.session_state.is_speak_mode = st.toggle("🌐 Internet Deep-Scan", value=True)
-    else:
-        st.session_state.is_speak_mode = False
-
-    if st.button("🗑️ Clear Chat History"):
+    if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
 
 #--------------------
-# Section 3: Data Write Functions (THE CORE)
+# Section 3: Data Write Functions
 #--------------------
 def save_direct(q, a):
-    """Bypasses approval - Only for Super-Devs"""
-    try:
-        df = conn.read(worksheet="Memory", ttl="1s")
-        new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
-        conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
-        st.toast("⚡ Memory Updated")
-    except: st.error("Write Error: Check Sheet Columns")
+    df = conn.read(worksheet="Memory", ttl="1s")
+    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
+    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
 
 def save_request(q, a):
-    """Sends to Requests tab for Admin review"""
-    try:
-        df = conn.read(worksheet="Requests", ttl="1s")
-        new_req = pd.DataFrame([{
-            "question": q.lower(), 
-            "answer": a, 
-            "user": "External", 
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
-        }])
-        conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
-        st.toast("📝 Request Logged")
-    except: st.error("Request Error: Check 'Requests' Tab")
+    df = conn.read(worksheet="Requests", ttl="1s")
+    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
+    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
 
 #--------------------
-# Section 4: Chat History Display
+# Section 4: Global Update Alert & History
 #--------------------
+# Check if a new memory has been added since the start of the session
+try:
+    current_mem = conn.read(worksheet="Memory", ttl="1s")
+    current_count = len(current_mem)
+    if st.session_state.last_mem_count == 0:
+        st.session_state.last_mem_count = current_count
+    
+    if current_count > st.session_state.last_mem_count:
+        st.success(f"🔔 **Update Alert:** {current_count - st.session_state.last_mem_count} new lesson(s) approved by Admin!")
+        if st.button("Acknowledge Update"):
+            st.session_state.last_mem_count = current_count
+            st.rerun()
+except: pass
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
@@ -144,9 +140,9 @@ def show_dual_voice(en_text, he_text):
             if he_fp: st.audio(he_fp)
 
 #--------------------
-# Section 9: Internet Search Brain
+# Section 9: Deepthink Mode (The Internet Brain)
 #--------------------
-def run_internet_scan(query, summarize=False):
+def run_deepthink(query, summarize=False):
     wiki_link = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en')
     wikipedia.set_lang("en")
     limit = 1200 if summarize else 15000
@@ -158,16 +154,15 @@ def run_internet_scan(query, summarize=False):
             page = wiki_link.page(s_results[0])
             if page.exists():
                 content = page.summary if summarize else page.text
-                return f"### 📂 DATA REPORT: {page.title}\n\n" + content[:limit]
+                return f"### 📂 DEEPTHINK REPORT: {page.title}\n\n" + content[:limit]
     except: return None
     return None
 
 #--------------------
-# Section 10: Local Memory Brain (READ ONLY)
+# Section 10: Local Memory Brain
 #--------------------
 def read_local_memory(prompt, threshold):
     try:
-        # Bot ONLY reads from the 'Memory' tab
         df = conn.read(worksheet="Memory", ttl="1s")
         qs = df['question'].fillna('').tolist()
         if qs:
@@ -178,7 +173,7 @@ def read_local_memory(prompt, threshold):
     return None
 
 #--------------------
-# Section 11: Logic - Sports and Hands-Brain
+# Section 11: Logic - Sports and Deepthink
 #--------------------
 if prompt := st.chat_input("Communicate with BDL..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -186,32 +181,33 @@ if prompt := st.chat_input("Communicate with BDL..."):
     response = ""
     hebrew_trans = ""
 
-    # A. TEACHING MODE (Triggered by Phase E)
+    # A. TEACHING MODE
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Super-Dev Override:** Memory Locked."
+            response = "⚡ **Super-Dev Override:** Global Memory Updated."
         else:
             save_request(st.session_state.last_question, prompt)
-            response = "📝 **System Logged:** Requesting Admin validation."
+            response = "📝 **Lesson Logged:** Requesting Admin approval."
         st.session_state.waiting_for_answer = False
 
     # B. MATH CHECK
     if not response: response = run_math(prompt)
 
-    # C. HANDS-BRAIN (Internet - Restricted to Super-Dev)
-    if not response and st.session_state.get('is_speak_mode') and is_speak_role:
+    # C. DEEPTHINK MODE (Available to all roles)
+    if not response and st.session_state.get('deepthink_enabled'):
         start_time = time.time()
-        with st.status("🚀 Hands-Brain Scanning...", expanded=False) as status:
-            summ = "(summary)" in prompt.lower() or sport_mode
-            response = run_internet_scan(prompt, summarize=summ)
-            status.update(label="Global Scan Complete!", state="complete")
+        with st.status("🧠 Deepthink Mode Scanning...", expanded=False) as status:
+            # Note: sport_mode is only toggleable by Admin but deepthink is for all
+            summ = "(summary)" in prompt.lower() or (is_admin_role and sport_mode)
+            response = run_deepthink(prompt, summarize=summ)
+            status.update(label="Deepthink Scan Complete!", state="complete")
         st.session_state.perf_data.append(time.time() - start_time)
 
     # D. LOCAL BRAIN (Memory Read)
     if not response: response = read_local_memory(prompt, intel_level)
 
-    # E. FALLBACK (Trigger the 'Teach' Cycle)
+    # E. FALLBACK
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
@@ -234,11 +230,10 @@ if prompt := st.chat_input("Communicate with BDL..."):
 if is_speak_role:
     with st.sidebar:
         st.markdown("---")
-        if st.button("🧪 Run Full System Test"):
-            with st.expander("🔎 Diagnostic Results", expanded=True):
-                st.write(f"🔢 Math: {'✅' if run_math('5+5') else '❌'}")
-                st.write(f"🇮🇱 Translation: {'✅' if get_hebrew('Test') else '❌'}")
+        if st.button("🧪 Run Diagnostic Test"):
+            with st.expander("🔎 Results", expanded=True):
+                st.write(f"🔢 Math: {'✅' if run_math('1+1') else '❌'}")
+                st.write(f"🇮🇱 Hebrew: {'✅' if get_hebrew('OK') else '❌'}")
                 if st.session_state.perf_data:
                     st.line_chart(st.session_state.perf_data)
-                    st.caption(f"Average Speed: {round(sum(st.session_state.perf_data)/len(st.session_state.perf_data), 2)}s")
                 st.success("Diagnostics Complete.")
