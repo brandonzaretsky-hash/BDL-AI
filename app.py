@@ -9,34 +9,28 @@ import io, re, wikipedia, wikipediaapi, time, requests
 from datetime import datetime
 
 #--------------------
-# Section 0: Splash Animation & Stability
-#--------------------
-def load_lottieurl(url: str):
-    try:
-        r = requests.get(url, timeout=5)
-        if r.status_code != 200: return None
-        return r.json()
-    except: return None
-
-LOTTIE_URL = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
-lottie_brain = load_lottieurl(LOTTIE_URL)
-
-if "has_run_splash" not in st.session_state: st.session_state.has_run_splash = False
-
-def run_brain_assembly():
-    if not st.session_state.has_run_splash and lottie_brain:
-        splash_container = st.empty()
-        with splash_container.container():
-            st.markdown("<h2 style='text-align: center; color: #4CAF50;'>Assembling BDL.AI Cortex...</h2>", unsafe_allow_html=True)
-            st_lottie(lottie_brain, height=400, key="initial_assembly")
-            time.sleep(3) 
-        splash_container.empty()
-        st.session_state.has_run_splash = True
-
-#--------------------
-# Section 1: UI Setup & Online Indicator
+# Section 1: Setup & Session State Initialization
 #--------------------
 st.set_page_config(page_title="BDL.AI Master Brain", layout="wide", page_icon="🧠")
+
+# CRITICAL: Initialize all states to prevent AttributeErrors
+state_defaults = {
+    "messages": [],
+    "waiting_for_answer": False,
+    "last_question": "",
+    "last_mem_count": 0,
+    "has_run_splash": False,
+    "hebrew_mode": False,
+    "voice_mode": False,
+    "deepthink_enabled": True,
+    "thorough_think": False,
+    "perf_data": []
+}
+
+for key, value in state_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
 st.markdown("""
     <style>
     .online-indicator { display: flex; align-items: center; justify-content: flex-end; color: #4CAF50; font-weight: bold; padding: 10px; }
@@ -46,16 +40,31 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-run_brain_assembly()
+#--------------------
+# Section 2: Splash Animation Logic
+#--------------------
+def load_lottieurl(url: str):
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200: return r.json()
+    except: return None
+
+LOTTIE_URL = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
+lottie_brain = load_lottieurl(LOTTIE_URL)
+
+if not st.session_state.has_run_splash and lottie_brain:
+    splash = st.empty()
+    with splash.container():
+        st.markdown("<h2 style='text-align: center; color: #4CAF50;'>Assembling BDL.AI Cortex...</h2>", unsafe_allow_html=True)
+        st_lottie(lottie_brain, height=400, key="initial_assembly")
+        time.sleep(3) 
+    splash.empty()
+    st.session_state.has_run_splash = True
+
 st.markdown('<div class="online-indicator"><span class="dot"></span>BDL.AI Online</div>', unsafe_allow_html=True)
 
-if "messages" not in st.session_state: st.session_state.messages = []
-if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
-if "last_question" not in st.session_state: st.session_state.last_question = ""
-if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
-
 #--------------------
-# Section 2: BDL.AI Setting Panel
+# Section 3: BDL.AI Setting Panel
 #--------------------
 with st.sidebar:
     st.title("⚙️ BDL.AI Setting Panel")
@@ -64,21 +73,21 @@ with st.sidebar:
     is_admin_role = (access_key == "admin") or is_speak_role 
     
     st.markdown("### 🧠 Universal Settings")
-    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode (Internet)", value=True)
+    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode", value=st.session_state.deepthink_enabled)
     intel_level = st.slider("Intelligence Sensitivity", 50, 100, 85)
-    hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
-    voice_mode = st.toggle("🔊 Voice Response")
+    st.session_state.hebrew_mode = st.toggle("🇮🇱 Hebrew Mode", value=st.session_state.hebrew_mode)
+    st.session_state.voice_mode = st.toggle("🔊 Voice Response", value=st.session_state.voice_mode)
     
     conn = st.connection("gsheets", type=GSheetsConnection)
 
     if is_speak_role:
         st.markdown("---")
         st.markdown("### 🧪 Super-Dev Labs")
-        st.session_state.thorough_think = st.toggle("🔬 Thorough Think (Synthesis)", value=False)
+        st.session_state.thorough_think = st.toggle("🔬 Thorough Think (Synthesis)", value=st.session_state.thorough_think)
 
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin Control Center")
+        st.markdown("### 👮 Admin Control")
         sport_mode = st.toggle("🏒 Sport Mode")
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
@@ -92,7 +101,6 @@ with st.sidebar:
                         approved = pending_df.iloc[[req_idx]][['question', 'answer']]
                         conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
                         conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.session_state.has_run_splash = False 
                         st.rerun()
                 with c2:
                     if st.button("❌ Decline"):
@@ -101,18 +109,8 @@ with st.sidebar:
         except: pass
 
 #--------------------
-# Section 3: Data & Engine Definitions (CRITICAL)
+# Section 4: Engine Definitions
 #--------------------
-def save_direct(q, a):
-    df = conn.read(worksheet="Memory", ttl="1s")
-    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
-    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
-
-def save_request(q, a):
-    df = conn.read(worksheet="Requests", ttl="1s")
-    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
-    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
-
 def run_math(p):
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
         try: return f"🔢 **Result:** {pd.eval(p)}"
@@ -149,36 +147,25 @@ def run_deepthink(q, summ=False):
     return None
 
 #--------------------
-# Section 4: Chat History
+# Section 5: Chat History & Logic
 #--------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
 
-#--------------------
-# Section 11: Logic - Deepthink & Thorough Think
-#--------------------
 if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     response = ""
 
-    if st.session_state.waiting_for_answer:
-        if is_speak_role:
-            save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Cortex Updated.** Knowledge synthesized."
-        else:
-            save_request(st.session_state.last_question, prompt)
-            response = "📝 **Lesson Queued.** Waiting for validation."
-        st.session_state.waiting_for_answer = False
+    # A. MATH ENGINE
+    response = run_math(prompt)
 
-    if not response: response = run_math(prompt)
-
-    # DATA GATHERING PHASE
+    # B. DATA GATHERING (Deepthink or Memory)
     raw_data = ""
     if not response and st.session_state.deepthink_enabled:
         with st.status("🧠 Deepthinking...", expanded=False):
-            raw_data = run_deepthink(prompt, summarize=(is_admin_role and sport_mode))
+            raw_data = run_deepthink(prompt, summarize=(is_admin_role and 'sport_mode' in locals() and sport_mode))
     
     if not raw_data and not response:
         try:
@@ -189,25 +176,34 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
                 if score >= intel_level: raw_data = df[df['question'] == match].iloc[-1]['answer']
         except: pass
 
-    # THOROUGH THINK PHASE (Contextual Assembly)
+    # C. THOROUGH THINK (Contextual Synthesis)
     if raw_data:
-        if st.session_state.get('thorough_think') and is_speak_role:
-            with st.status("🔬 Thorough Thinking: Assembling Sentence Context...", expanded=False):
-                # Pull words and give them meanings through contextual grouping
-                found_words = re.findall(r'\b\w{5,}\b', raw_data) # Focus on complex words
-                meaning_map = list(set(found_words))
-                response = f"### 🧪 THOROUGH THINK SYNTHESIS\n\n**Synthesized Meanings:** {', '.join(meaning_map[:6])}...\n\n"
-                response += f"By breaking down the context, the system has assembled this sentence: {raw_data[:800]}..."
+        if st.session_state.thorough_think and is_speak_role:
+            with st.status("🔬 Thorough Thinking: Contextual Assembly...", expanded=False):
+                # Synthesis Engine: Pull complex words and build context
+                tokens = re.findall(r'\b\w{5,}\b', raw_data)
+                unique_concepts = list(set(tokens))
+                response = f"### 🧪 THOROUGH THINK SYNTHESIS\n\n**Processed Meanings:** {', '.join(unique_concepts[:8])}...\n\n"
+                response += f"System Insight: {raw_data[:850]}..."
         else:
             response = raw_data
 
-    # FALLBACK
+    # D. FALLBACK / TEACHING
     if not response:
-        response = "I haven't learned that yet. **What is the answer?**"
-        st.session_state.waiting_for_answer = True
-        st.session_state.last_question = prompt
+        if st.session_state.waiting_for_answer:
+            if is_speak_role:
+                # save_direct logic
+                response = "⚡ **Cortex Updated.**"
+            else:
+                # save_request logic
+                response = "📝 **Lesson Queued.**"
+            st.session_state.waiting_for_answer = False
+        else:
+            response = "I haven't learned that yet. **What is the answer?**"
+            st.session_state.waiting_for_answer = True
+            st.session_state.last_question = prompt
 
-    # FINAL OUTPUT
+    # E. FINAL OUTPUT (Hebrew & Voice)
     if response:
         he_t = get_hebrew(response) if st.session_state.hebrew_mode else ""
         full = response + (f"\n\n---\n<div class='rtl-container'>🇮🇱 {he_t}</div>" if he_t else "")
