@@ -9,7 +9,7 @@ import io, re, wikipedia, wikipediaapi, time, requests
 from datetime import datetime
 
 #--------------------
-# Section 1: Setup & Session State Initialization
+# Section 1: Setup & Session State
 #--------------------
 st.set_page_config(page_title="BDL.AI Master Brain", layout="wide", page_icon="🧠")
 
@@ -22,8 +22,7 @@ state_defaults = {
     "hebrew_mode": False,
     "voice_mode": False,
     "deepthink_enabled": True,
-    "thorough_think": False,
-    "perf_data": []
+    "thorough_think": False
 }
 
 for key, value in state_defaults.items():
@@ -40,7 +39,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 #--------------------
-# Section 2: Splash Animation Logic
+# Section 2: Splash Animation
 #--------------------
 def load_lottieurl(url: str):
     try:
@@ -63,85 +62,31 @@ if not st.session_state.has_run_splash and lottie_brain:
 st.markdown('<div class="online-indicator"><span class="dot"></span>BDL.AI Online</div>', unsafe_allow_html=True)
 
 #--------------------
-# Section 3: Data Write Functions
+# Section 3: Data Functions
 #--------------------
-def save_direct(q, a):
+def save_direct(q, a, conn):
     df = conn.read(worksheet="Memory", ttl="1s")
     new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
     conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
 
-def save_request(q, a):
+def save_request(q, a, conn):
     df = conn.read(worksheet="Requests", ttl="1s")
     new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
     conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
 
-def save_context(topic, meaning):
-    """Directly saves a knowledge block to the Context tab"""
-    df = conn.read(worksheet="Context", ttl="1s")
-    new_context = pd.DataFrame([{
+def save_context_request(topic, meaning, conn):
+    """Saves to the PENDING ContextRequests tab for everyone"""
+    df = conn.read(worksheet="ContextRequests", ttl="1s")
+    new_req = pd.DataFrame([{
         "Topic": topic.lower(),
         "Meaning": meaning,
+        "User": "External",
         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
     }])
-    conn.update(worksheet="Context", data=pd.concat([df, new_context], ignore_index=True))
+    conn.update(worksheet="ContextRequests", data=pd.concat([df, new_req], ignore_index=True))
 
 #--------------------
-# Section 4: BDL.AI Setting Panel
-#--------------------
-with st.sidebar:
-    st.title("⚙️ BDL.AI Setting Panel")
-    access_key = st.text_input("Enter Access Key", type="password")
-    is_speak_role = (access_key == "qwerty")
-    is_admin_role = (access_key == "admin") or is_speak_role 
-    
-    st.markdown("### 🧠 Universal Settings")
-    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode", value=st.session_state.deepthink_enabled)
-    intel_level = st.slider("Intelligence Sensitivity", 50, 100, 85)
-    st.session_state.hebrew_mode = st.toggle("🇮🇱 Hebrew Mode", value=st.session_state.hebrew_mode)
-    st.session_state.voice_mode = st.toggle("🔊 Voice Response", value=st.session_state.voice_mode)
-    
-    conn = st.connection("gsheets", type=GSheetsConnection)
-
-    # CORTEX TRAINING: Super-Dev Only
-    if is_speak_role:
-        st.markdown("---")
-        st.markdown("### 🧪 Super-Dev Labs")
-        st.session_state.thorough_think = st.toggle("🔬 Thorough Think (Synthesis)", value=st.session_state.thorough_think)
-        
-        with st.expander("📚 Cortex Training (Context Bank)"):
-            c_topic = st.text_input("Core Topic (e.g. Hotends)")
-            c_meaning = st.text_area("Meaning Block (Knowledge Paragraph)")
-            if st.button("Train Brain"):
-                if c_topic and c_meaning:
-                    save_context(c_topic, c_meaning)
-                    st.success("Context Integrated.")
-                    st.rerun()
-
-    if is_admin_role:
-        st.markdown("---")
-        st.markdown("### 👮 Admin Control Center")
-        sport_mode = st.toggle("🏒 Sport Mode")
-        try:
-            pending_df = conn.read(worksheet="Requests", ttl="1s")
-            if not pending_df.empty:
-                st.dataframe(pending_df, use_container_width=True)
-                req_idx = st.number_input("ID to Manage", 0, len(pending_df)-1, 0)
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("✅ Approve"):
-                        main_mem = conn.read(worksheet="Memory", ttl="1s")
-                        approved = pending_df.iloc[[req_idx]][['question', 'answer']]
-                        conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
-                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.rerun()
-                with c2:
-                    if st.button("❌ Decline"):
-                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.rerun()
-        except: pass
-
-#--------------------
-# Section 5-10: Engine Definitions
+# Section 4: Engine Definitions (Math, Voice, Deepthink, etc.)
 #--------------------
 def run_math(p):
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
@@ -179,73 +124,144 @@ def run_deepthink(q, summ=False):
     return None
 
 #--------------------
-# Section 11: Main Brain Logic
+# Section 5: BDL.AI Setting Panel
+#--------------------
+with st.sidebar:
+    st.title("⚙️ BDL.AI Setting Panel")
+    access_key = st.text_input("Enter Access Key", type="password")
+    is_speak_role = (access_key == "qwerty")
+    is_admin_role = (access_key == "admin") or is_speak_role 
+    
+    st.markdown("### 🧠 Universal Settings")
+    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode", value=st.session_state.deepthink_enabled)
+    intel_level = st.slider("Intelligence Sensitivity", 50, 100, 85)
+    st.session_state.hebrew_mode = st.toggle("🇮🇱 Hebrew Mode", value=st.session_state.hebrew_mode)
+    st.session_state.voice_mode = st.toggle("🔊 Voice Response", value=st.session_state.voice_mode)
+    
+    conn = st.connection("gsheets", type=GSheetsConnection)
+
+    # --- UNIVERSAL TRAINING (For All Users) ---
+    st.markdown("---")
+    with st.expander("📚 Train BDL Cortex"):
+        st.caption("Suggest raw knowledge blocks for the synthesis engine.")
+        u_topic = st.text_input("Topic Name", key="utopic")
+        u_meaning = st.text_area("Detailed Meaning (Paragraph)", key="umeaning")
+        if st.button("Submit for Review"):
+            if u_topic and u_meaning:
+                save_context_request(u_topic, u_meaning, conn)
+                st.info("Sent to Super-Dev for assembly.")
+
+    # --- SUPER-DEV VAULT (Approval Panel) ---
+    if is_speak_role:
+        st.markdown("---")
+        st.markdown("### 🧪 Super-Dev Vault")
+        st.session_state.thorough_think = st.toggle("🔬 Thorough Think", value=st.session_state.thorough_think)
+        
+        try:
+            # Context Approval
+            c_pending = conn.read(worksheet="ContextRequests", ttl="1s")
+            if not c_pending.empty:
+                st.markdown("**Pending Context Blocks:**")
+                st.dataframe(c_pending, use_container_width=True)
+                c_idx = st.number_input("Context ID", 0, len(c_pending)-1, 0)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Approve Context"):
+                        main_context = conn.read(worksheet="Context", ttl="1s")
+                        approved_c = c_pending.iloc[[c_idx]][['Topic', 'Meaning']]
+                        conn.update(worksheet="Context", data=pd.concat([main_context, approved_c], ignore_index=True))
+                        conn.update(worksheet="ContextRequests", data=c_pending.drop(c_pending.index[c_idx]))
+                        st.rerun()
+                with col2:
+                    if st.button("❌ Decline Context"):
+                        conn.update(worksheet="ContextRequests", data=c_pending.drop(c_pending.index[c_idx]))
+                        st.rerun()
+        except: pass
+
+    # Admin Control (Existing Q&A Approval)
+    if is_admin_role:
+        st.markdown("---")
+        st.markdown("### 👮 Admin Controls")
+        sport_mode = st.toggle("🏒 Sport Mode")
+        try:
+            pending_df = conn.read(worksheet="Requests", ttl="1s")
+            if not pending_df.empty:
+                st.dataframe(pending_df, use_container_width=True)
+                req_idx = st.number_input("Request ID", 0, len(pending_df)-1, 0)
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("✅ Approve Lesson"):
+                        main_m = conn.read(worksheet="Memory", ttl="1s")
+                        app_row = pending_df.iloc[[req_idx]][['question', 'answer']]
+                        conn.update(worksheet="Memory", data=pd.concat([main_m, app_row], ignore_index=True))
+                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
+                        st.rerun()
+                with b2:
+                    if st.button("❌ Decline Lesson"):
+                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
+                        st.rerun()
+        except: pass
+
+#--------------------
+# Section 11: Logic (Deepthink & Thorough Think)
 #--------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
 
-if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
+if prompt := st.chat_input("Communicate..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     response = ""
+    raw_data = ""
 
-    # A. MATH ENGINE
+    # A. MATH
     response = run_math(prompt)
 
-    # B. DATA GATHERING (Deepthink, Context, or Memory)
-    raw_data = ""
-    
-    # Check Context Bank if Thorough Think is ON
+    # B. DATA GATHERING
+    # 1. Check Context (Priority for Thorough Think)
     if not response and st.session_state.thorough_think and is_speak_role:
         try:
-            context_df = conn.read(worksheet="Context", ttl="1s")
-            topics = context_df['Topic'].fillna('').tolist()
+            c_df = conn.read(worksheet="Context", ttl="1s")
+            topics = c_df['Topic'].fillna('').tolist()
             if topics:
-                match, score = process.extractOne(prompt, topics, scorer=fuzz.token_set_ratio)
-                if score >= intel_level:
-                    raw_data = context_df[context_df['Topic'] == match].iloc[-1]['Meaning']
+                m, s = process.extractOne(prompt, topics, scorer=fuzz.token_sort_ratio)
+                if s >= intel_level: raw_data = c_df[c_df['Topic'] == m].iloc[-1]['Meaning']
         except: pass
 
-    # Deepthink Fallback
+    # 2. Deepthink
     if not raw_data and not response and st.session_state.deepthink_enabled:
         with st.status("🧠 Deepthinking...", expanded=False):
             raw_data = run_deepthink(prompt, summarize=(is_admin_role and 'sport_mode' in locals() and sport_mode))
     
-    # Local Memory Fallback
+    # 3. Memory
     if not raw_data and not response:
         try:
-            df = conn.read(worksheet="Memory", ttl="1s")
-            qs = df['question'].fillna('').tolist()
+            m_df = conn.read(worksheet="Memory", ttl="1s")
+            qs = m_df['question'].fillna('').tolist()
             if qs:
-                match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
-                if score >= intel_level: raw_data = df[df['question'] == match].iloc[-1]['answer']
+                m, s = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
+                if s >= intel_level: raw_data = m_df[m_df['question'] == m].iloc[-1]['answer']
         except: pass
 
-    # C. SYNTHESIS ENGINE (Thorough Think)
+    # C. SYNTHESIS
     if raw_data:
         if st.session_state.thorough_think and is_speak_role:
-            with st.status("🔬 Thorough Thinking: Synthesizing Context...", expanded=False):
-                # Synthesis: Extract vocab and reconstruct insight
+            with st.status("🔬 Thorough Thinking...", expanded=False):
                 tokens = re.findall(r'\b\w{5,}\b', raw_data.lower())
-                prompt_keys = set(re.findall(r'\b\w{3,}\b', prompt.lower()))
-                related = [w for w in set(tokens) if any(k[:4] in w for k in prompt_keys)]
-                
-                response = f"### 🧪 SYNTHESIZED INSIGHT\n\n"
-                if related:
-                    response += f"The cortex has linked **{', '.join(related[:3])}** to provide this meaning: "
-                response += f"{raw_data[:900]}..."
+                response = f"### 🧪 SYNTHESIZED INSIGHT\n\n**Processed Context:** {', '.join(list(set(tokens))[:5])}...\n\n"
+                response += f"Based on the cortex: {raw_data[:850]}..."
         else:
             response = raw_data
 
-    # D. FALLBACK / TEACHING
+    # D. FALLBACK
     if not response:
         if st.session_state.waiting_for_answer:
             if is_speak_role:
-                save_direct(st.session_state.last_question, prompt)
+                save_direct(st.session_state.last_question, prompt, conn)
                 response = "⚡ **Cortex Updated.**"
             else:
-                save_request(st.session_state.last_question, prompt)
+                save_request(st.session_state.last_question, prompt, conn)
                 response = "📝 **Lesson Queued.**"
             st.session_state.waiting_for_answer = False
         else:
@@ -253,7 +269,7 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
-    # E. FINAL OUTPUT
+    # E. OUTPUT
     if response:
         he_t = get_hebrew(response) if st.session_state.hebrew_mode else ""
         full = response + (f"\n\n---\n<div class='rtl-container'>🇮🇱 {he_t}</div>" if he_t else "")
@@ -261,4 +277,3 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
             st.markdown(full, unsafe_allow_html=True)
             if st.session_state.voice_mode: show_voices(response, he_t)
         st.session_state.messages.append({"role": "assistant", "content": full})
-        
