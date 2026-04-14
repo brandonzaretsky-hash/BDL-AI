@@ -75,7 +75,7 @@ def save_request(q, a, conn):
     conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
 
 def save_context_request(topic, meaning, conn):
-    """Saves to the PENDING ContextRequests tab for everyone"""
+    """Universal training saves to the PENDING tab"""
     df = conn.read(worksheet="ContextRequests", ttl="1s")
     new_req = pd.DataFrame([{
         "Topic": topic.lower(),
@@ -86,7 +86,7 @@ def save_context_request(topic, meaning, conn):
     conn.update(worksheet="ContextRequests", data=pd.concat([df, new_req], ignore_index=True))
 
 #--------------------
-# Section 4: Engine Definitions (Math, Voice, Deepthink, etc.)
+# Section 4: Engine Definitions
 #--------------------
 def run_math(p):
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
@@ -138,68 +138,79 @@ with st.sidebar:
     st.session_state.hebrew_mode = st.toggle("🇮🇱 Hebrew Mode", value=st.session_state.hebrew_mode)
     st.session_state.voice_mode = st.toggle("🔊 Voice Response", value=st.session_state.voice_mode)
     
+    # Universal Utility Buttons
+    st.markdown("---")
+    u_col1, u_col2 = st.columns(2)
+    with u_col1:
+        if st.button("🗑️ Clear Chat"):
+            st.session_state.messages = []
+            st.rerun()
+    with u_col2:
+        if st.button("⏪ Undo Last"):
+            if len(st.session_state.messages) >= 2:
+                st.session_state.messages.pop(); st.session_state.messages.pop(); st.rerun()
+            else: st.toast("Empty cortex!")
+
     conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # --- UNIVERSAL TRAINING (For All Users) ---
+    # Universal Training (All users see this)
     st.markdown("---")
-    with st.expander("📚 Train BDL Cortex"):
-        st.caption("Suggest raw knowledge blocks for the synthesis engine.")
-        u_topic = st.text_input("Topic Name", key="utopic")
-        u_meaning = st.text_area("Detailed Meaning (Paragraph)", key="umeaning")
-        if st.button("Submit for Review"):
+    with st.expander("📚 Universal Cortex Training"):
+        st.caption("Submit knowledge blocks for the synthesis engine.")
+        u_topic = st.text_input("Core Topic (e.g. Hotends)", key="ut")
+        u_meaning = st.text_area("Detailed Meaning Block", key="um")
+        if st.button("Submit Knowledge"):
             if u_topic and u_meaning:
                 save_context_request(u_topic, u_meaning, conn)
-                st.info("Sent to Super-Dev for assembly.")
+                st.success("Sent to Super-Dev for assembly.")
 
-    # --- SUPER-DEV VAULT (Approval Panel) ---
+    # SUPER-DEV VAULT (qwerty only)
     if is_speak_role:
         st.markdown("---")
         st.markdown("### 🧪 Super-Dev Vault")
         st.session_state.thorough_think = st.toggle("🔬 Thorough Think", value=st.session_state.thorough_think)
         
         try:
-            # Context Approval
+            # 1. CONTEXT APPROVAL (Training Blocks)
             c_pending = conn.read(worksheet="ContextRequests", ttl="1s")
             if not c_pending.empty:
-                st.markdown("**Pending Context Blocks:**")
+                st.markdown("**Pending Cortex Training:**")
+                # Ensure the columns are labeled correctly and visible
                 st.dataframe(c_pending, use_container_width=True)
-                c_idx = st.number_input("Context ID", 0, len(c_pending)-1, 0)
+                c_idx = st.number_input("Select Context ID", 0, len(c_pending)-1, 0)
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("✅ Approve Context"):
-                        main_context = conn.read(worksheet="Context", ttl="1s")
+                        main_c = conn.read(worksheet="Context", ttl="1s")
+                        # Transfer Topic and Meaning to permanent Cortex
                         approved_c = c_pending.iloc[[c_idx]][['Topic', 'Meaning']]
-                        conn.update(worksheet="Context", data=pd.concat([main_context, approved_c], ignore_index=True))
+                        conn.update(worksheet="Context", data=pd.concat([main_c, approved_c], ignore_index=True))
                         conn.update(worksheet="ContextRequests", data=c_pending.drop(c_pending.index[c_idx]))
                         st.rerun()
                 with col2:
                     if st.button("❌ Decline Context"):
                         conn.update(worksheet="ContextRequests", data=c_pending.drop(c_pending.index[c_idx]))
                         st.rerun()
-        except: pass
+        except: st.error("ContextRequests Tab Missing!")
 
-    # Admin Control (Existing Q&A Approval)
+    # ADMIN CONTROLS (admin or qwerty)
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin Controls")
+        st.markdown("### 👮 Admin Control Center")
         sport_mode = st.toggle("🏒 Sport Mode")
         try:
+            # 2. LESSON APPROVAL (Q&A)
             pending_df = conn.read(worksheet="Requests", ttl="1s")
             if not pending_df.empty:
+                st.markdown("**Pending Q&A Lessons:**")
                 st.dataframe(pending_df, use_container_width=True)
-                req_idx = st.number_input("Request ID", 0, len(pending_df)-1, 0)
-                b1, b2 = st.columns(2)
-                with b1:
-                    if st.button("✅ Approve Lesson"):
-                        main_m = conn.read(worksheet="Memory", ttl="1s")
-                        app_row = pending_df.iloc[[req_idx]][['question', 'answer']]
-                        conn.update(worksheet="Memory", data=pd.concat([main_m, app_row], ignore_index=True))
-                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.rerun()
-                with b2:
-                    if st.button("❌ Decline Lesson"):
-                        conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.rerun()
+                r_idx = st.number_input("Select Request ID", 0, len(pending_df)-1, 0)
+                if st.button("✅ Approve Lesson"):
+                    m_m = conn.read(worksheet="Memory", ttl="1s")
+                    a_r = pending_df.iloc[[r_idx]][['question', 'answer']]
+                    conn.update(worksheet="Memory", data=pd.concat([m_m, a_r], ignore_index=True))
+                    conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[r_idx]))
+                    st.rerun()
         except: pass
 
 #--------------------
@@ -215,11 +226,9 @@ if prompt := st.chat_input("Communicate..."):
     response = ""
     raw_data = ""
 
-    # A. MATH
     response = run_math(prompt)
 
-    # B. DATA GATHERING
-    # 1. Check Context (Priority for Thorough Think)
+    # 1. Search Context (Thorough Think priority)
     if not response and st.session_state.thorough_think and is_speak_role:
         try:
             c_df = conn.read(worksheet="Context", ttl="1s")
@@ -234,7 +243,7 @@ if prompt := st.chat_input("Communicate..."):
         with st.status("🧠 Deepthinking...", expanded=False):
             raw_data = run_deepthink(prompt, summarize=(is_admin_role and 'sport_mode' in locals() and sport_mode))
     
-    # 3. Memory
+    # 3. Local Memory
     if not raw_data and not response:
         try:
             m_df = conn.read(worksheet="Memory", ttl="1s")
@@ -244,32 +253,27 @@ if prompt := st.chat_input("Communicate..."):
                 if s >= intel_level: raw_data = m_df[m_df['question'] == m].iloc[-1]['answer']
         except: pass
 
-    # C. SYNTHESIS
+    # SYNTHESIS
     if raw_data:
         if st.session_state.thorough_think and is_speak_role:
             with st.status("🔬 Thorough Thinking...", expanded=False):
                 tokens = re.findall(r'\b\w{5,}\b', raw_data.lower())
                 response = f"### 🧪 SYNTHESIZED INSIGHT\n\n**Processed Context:** {', '.join(list(set(tokens))[:5])}...\n\n"
                 response += f"Based on the cortex: {raw_data[:850]}..."
-        else:
-            response = raw_data
+        else: response = raw_data
 
-    # D. FALLBACK
+    # FALLBACK
     if not response:
         if st.session_state.waiting_for_answer:
-            if is_speak_role:
-                save_direct(st.session_state.last_question, prompt, conn)
-                response = "⚡ **Cortex Updated.**"
-            else:
-                save_request(st.session_state.last_question, prompt, conn)
-                response = "📝 **Lesson Queued.**"
+            if is_speak_role: save_direct(st.session_state.last_question, prompt, conn)
+            else: save_request(st.session_state.last_question, prompt, conn)
+            response = "⚡ System Logged."
             st.session_state.waiting_for_answer = False
         else:
             response = "I haven't learned that yet. **What is the answer?**"
             st.session_state.waiting_for_answer = True
             st.session_state.last_question = prompt
 
-    # E. OUTPUT
     if response:
         he_t = get_hebrew(response) if st.session_state.hebrew_mode else ""
         full = response + (f"\n\n---\n<div class='rtl-container'>🇮🇱 {he_t}</div>" if he_t else "")
