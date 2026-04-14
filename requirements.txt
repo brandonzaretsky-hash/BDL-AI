@@ -10,3 +10,5 @@ googlesearch-python
 gTTS
 fuzzywuzzy
 python-Levenshtein
+streamlit-lottie
+requests
