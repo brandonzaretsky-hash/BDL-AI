@@ -29,7 +29,7 @@ if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
 # Section 2: Sidebar Security & Universal Controls
 #--------------------
 with st.sidebar:
-    st.title("🛡️ BDL Security & Deepthink")
+    st.title("🛡️ BDL.AI Setting Panel 🛡️")
     access_key = st.text_input("Enter Access Key", type="password")
 
     is_speak_role = (access_key == "qwerty") # Super-Dev
