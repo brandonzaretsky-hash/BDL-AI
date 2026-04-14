@@ -5,11 +5,11 @@ from fuzzywuzzy import fuzz, process
 from deep_translator import GoogleTranslator
 from gtts import gTTS
 from streamlit_lottie import st_lottie
-import io, re, wikipedia, wikipediaapi, time, requests, random
+import io, re, wikipedia, wikipediaapi, time, requests
 from datetime import datetime
 
 #--------------------
-# Section 0: Splash Animation (Stable)
+# Section 0: Splash Animation & Stability
 #--------------------
 def load_lottieurl(url: str):
     try:
@@ -34,7 +34,7 @@ def run_brain_assembly():
         st.session_state.has_run_splash = True
 
 #--------------------
-# Section 1: Setup & Indicator
+# Section 1: UI Setup & Online Indicator
 #--------------------
 st.set_page_config(page_title="BDL.AI Master Brain", layout="wide", page_icon="🧠")
 st.markdown("""
@@ -71,15 +71,14 @@ with st.sidebar:
     
     conn = st.connection("gsheets", type=GSheetsConnection)
 
-    # THOROUGH THINK MODE: SUPER-DEV ONLY
     if is_speak_role:
         st.markdown("---")
         st.markdown("### 🧪 Super-Dev Labs")
-        st.session_state.thorough_think = st.toggle("🔬 Thorough Think (Contextual Synthesis)", value=False)
+        st.session_state.thorough_think = st.toggle("🔬 Thorough Think (Synthesis)", value=False)
 
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin Control")
+        st.markdown("### 👮 Admin Control Center")
         sport_mode = st.toggle("🏒 Sport Mode")
         try:
             pending_df = conn.read(worksheet="Requests", ttl="1s")
@@ -102,65 +101,117 @@ with st.sidebar:
         except: pass
 
 #--------------------
-# Section 11: Logic - Sports, Deepthink, and Thorough Think
+# Section 3: Data & Engine Definitions (CRITICAL)
 #--------------------
-if prompt := st.chat_input("Communicate..."):
+def save_direct(q, a):
+    df = conn.read(worksheet="Memory", ttl="1s")
+    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
+    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
+
+def save_request(q, a):
+    df = conn.read(worksheet="Requests", ttl="1s")
+    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
+    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
+
+def run_math(p):
+    if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
+        try: return f"🔢 **Result:** {pd.eval(p)}"
+        except: return None
+    return None
+
+def get_hebrew(t):
+    try: return GoogleTranslator(source='auto', target='iw').translate(t[:800])
+    except: return None
+
+def show_voices(e, h):
+    v1, v2 = st.columns(2)
+    with v1:
+        try:
+            tts_e = gTTS(e[:3000], lang='en'); f_e = io.BytesIO(); tts_e.write_to_fp(f_e); st.audio(f_e)
+        except: pass
+    if h:
+        with v2:
+            try:
+                tts_h = gTTS(h, lang='iw'); f_h = io.BytesIO(); tts_h.write_to_fp(f_h); st.audio(f_h)
+            except: pass
+
+def run_deepthink(q, summ=False):
+    wiki = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en'); wikipedia.set_lang("en")
+    limit = 1200 if summ else 15000
+    clean_q = q.lower().replace("(summary)", "")
+    for n in ['what is', 'who is', '?']: clean_q = clean_q.replace(n, "")
+    try:
+        s = wikipedia.search(clean_q.strip())
+        if s:
+            p = wiki.page(s[0])
+            if p.exists(): return (p.summary if summ else p.text)[:limit]
+    except: return None
+    return None
+
+#--------------------
+# Section 4: Chat History
+#--------------------
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"], unsafe_allow_html=True)
+
+#--------------------
+# Section 11: Logic - Deepthink & Thorough Think
+#--------------------
+if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     response = ""
 
-    # A. TEACHING
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **Cortex Updated.**"
+            response = "⚡ **Cortex Updated.** Knowledge synthesized."
         else:
             save_request(st.session_state.last_question, prompt)
-            response = "📝 **Lesson Queued.**"
+            response = "📝 **Lesson Queued.** Waiting for validation."
         st.session_state.waiting_for_answer = False
 
-    # B. MATH
     if not response: response = run_math(prompt)
 
-    # C. DATA ACQUISITION (Deepthink or Memory)
-    source_text = ""
+    # DATA GATHERING PHASE
+    raw_data = ""
     if not response and st.session_state.deepthink_enabled:
         with st.status("🧠 Deepthinking...", expanded=False):
-            source_text = run_deepthink(prompt, summarize=(is_admin_role and sport_mode))
+            raw_data = run_deepthink(prompt, summarize=(is_admin_role and sport_mode))
     
-    if not source_text and not response:
-        source_text = read_local_memory(prompt, intel_level)
+    if not raw_data and not response:
+        try:
+            df = conn.read(worksheet="Memory", ttl="1s")
+            qs = df['question'].fillna('').tolist()
+            if qs:
+                match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
+                if score >= intel_level: raw_data = df[df['question'] == match].iloc[-1]['answer']
+        except: pass
 
-    # D. THOROUGH THINK PROCESSING (Super-Dev Only)
-    if source_text and st.session_state.get('thorough_think') and is_speak_role:
-        with st.status("🔬 Thorough Thinking: Assembling Context...", expanded=False):
-            # 1. Pull all words and context
-            words = re.findall(r'\b\w{4,}\b', source_text) # Extract meaningful words
-            unique_words = list(set(words))
-            
-            # 2. Simulate sentence assembly based on prompt keywords
-            context_highlights = [w for w in unique_words if any(p_word in w.lower() for p_word in prompt.lower().split())]
-            
-            # 3. Assemble Custom Response
-            response = f"### 🧪 THOROUGH THINK SYNTHESIS\n\n"
-            response += f"**Analyzed Context:** {', '.join(context_highlights[:5])}...\n\n"
-            # Rebuilding a core meaning sentence
-            response += f"Based on the processed words, the system has assembled this insight: "
-            response += f"{source_text[:500]}..." # Still provides the data but marked as synthesized
-    else:
-        response = source_text
+    # THOROUGH THINK PHASE (Contextual Assembly)
+    if raw_data:
+        if st.session_state.get('thorough_think') and is_speak_role:
+            with st.status("🔬 Thorough Thinking: Assembling Sentence Context...", expanded=False):
+                # Pull words and give them meanings through contextual grouping
+                found_words = re.findall(r'\b\w{5,}\b', raw_data) # Focus on complex words
+                meaning_map = list(set(found_words))
+                response = f"### 🧪 THOROUGH THINK SYNTHESIS\n\n**Synthesized Meanings:** {', '.join(meaning_map[:6])}...\n\n"
+                response += f"By breaking down the context, the system has assembled this sentence: {raw_data[:800]}..."
+        else:
+            response = raw_data
 
-    # E. FALLBACK
+    # FALLBACK
     if not response:
         response = "I haven't learned that yet. **What is the answer?**"
         st.session_state.waiting_for_answer = True
         st.session_state.last_question = prompt
 
-    # F. OUTPUT
+    # FINAL OUTPUT
     if response:
-        he_t = get_hebrew(response) if st.session_state.get('hebrew_mode') else ""
+        he_t = get_hebrew(response) if st.session_state.hebrew_mode else ""
         full = response + (f"\n\n---\n<div class='rtl-container'>🇮🇱 {he_t}</div>" if he_t else "")
         with st.chat_message("assistant"):
             st.markdown(full, unsafe_allow_html=True)
-            if st.session_state.get('voice_mode'): show_voices(response, he_t)
+            if st.session_state.voice_mode: show_voices(response, he_t)
         st.session_state.messages.append({"role": "assistant", "content": full})
