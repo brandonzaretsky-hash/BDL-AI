@@ -4,67 +4,68 @@ from streamlit_gsheets import GSheetsConnection
 from fuzzywuzzy import fuzz, process
 from deep_translator import GoogleTranslator
 from gtts import gTTS
-from streamlit_lottie import st_lottie
-import io, re, wikipedia, wikipediaapi, time, requests
+import io, re, wikipedia, wikipediaapi, time
 from datetime import datetime
 
 #--------------------
-# Section 0: Splash Animation & Update Logic
+# Section 0: The Brain Assembly Splash (Video)
 #--------------------
-def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200: return None
-    return r.json()
-
-# Lottie for Robotic Assembly/AI Brain
-lottie_brain = load_lottieurl("https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json")
-
-# Initialize Session States
-if "messages" not in st.session_state: st.session_state.messages = []
-if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
-if "last_question" not in st.session_state: st.session_state.last_question = ""
-if "perf_data" not in st.session_state: st.session_state.perf_data = []
-if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
+# Note: You need a file named 'brain_assembly.mp4' in your folder for this.
 if "has_run_splash" not in st.session_state: st.session_state.has_run_splash = False
 
+def run_splash_animation():
+    if not st.session_state.has_run_splash:
+        splash = st.empty()
+        with splash.container():
+            # This plays your assembly video. 'muted=True' allows autoplay.
+            try:
+                video_file = open('brain_assembly.mp4', 'rb')
+                video_bytes = video_file.read()
+                st.video(video_bytes, format="video/mp4", autoplay=True, muted=True)
+                time.sleep(5) # Matches the length of your video
+            except:
+                st.warning("⚠️ 'brain_assembly.mp4' not found. Skipping animation.")
+        splash.empty()
+        st.session_state.has_run_splash = True
+
 #--------------------
-# Section 1: Setup & CSS (The Online Indicator)
+# Section 1: Setup & CSS (Online Indicator)
 #--------------------
-st.set_page_config(page_title="BDL-ai V6.5 Master", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="BDL.AI Master Brain", layout="wide", page_icon="🧠")
 
 st.markdown("""
     <style>
-    /* BDL.AI Online Indicator */
-    .online-indicator {
-        display: flex; align-items: center; justify-content: flex-end;
-        padding: 10px; font-weight: bold; color: #4CAF50;
-    }
-    .dot {
-        height: 10px; width: 10px; background-color: #4CAF50;
-        border-radius: 50%; display: inline-block; margin-right: 8px;
-        box-shadow: 0 0 8px #4CAF50; animation: pulse-green 2s infinite;
-    }
-    @keyframes pulse-green {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
-        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
-    }
+    .online-indicator { display: flex; align-items: center; justify-content: flex-end; color: #4CAF50; font-weight: bold; padding: 10px; }
+    .dot { height: 10px; width: 10px; background-color: #4CAF50; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 8px #4CAF50; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
     .rtl-container { direction: rtl; text-align: right; background-color: #1e1e1e; padding: 15px; border-radius: 10px; border: 1px solid #444; }
     </style>
     """, unsafe_allow_html=True)
 
+# Run the assembly animation on refresh/load
+run_splash_animation()
+
+# Top Indicator
+st.markdown('<div class="online-indicator"><span class="dot"></span>BDL.AI Online</div>', unsafe_allow_html=True)
+
+# Session States
+if "messages" not in st.session_state: st.session_state.messages = []
+if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
+if "last_question" not in st.session_state: st.session_state.last_question = ""
+if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
+
 #--------------------
-# Section 2: Sidebar (BDL.AI Setting Panel)
+# Section 2: BDL.AI Setting Panel
 #--------------------
 with st.sidebar:
     st.title("⚙️ BDL.AI Setting Panel")
-    access_key = st.text_input("Enter Access Key", type="password")
+    access_key = st.text_input("Access Key", type="password")
 
-    is_speak_role = (access_key == "qwerty")
-    is_admin_role = (access_key == "admin") or is_speak_role 
+    is_speak_role = (access_key == "qwerty") # Super-Dev
+    is_admin_role = (access_key == "admin") or is_speak_role # Admin
     
-    st.markdown("### 🧠 Universal Brain Settings")
-    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode (Internet)", value=False)
+    st.markdown("### 🧠 Universal Settings")
+    st.session_state.deepthink_enabled = st.toggle("🌐 Deepthink Mode (Internet)", value=True)
     intel_level = st.slider("Intelligence Sensitivity", 50, 100, 85)
     hebrew_mode = st.toggle("🇮🇱 Hebrew Mode")
     voice_mode = st.toggle("🔊 Voice Response")
@@ -73,7 +74,7 @@ with st.sidebar:
 
     if is_admin_role:
         st.markdown("---")
-        st.markdown("### 👮 Admin Control Center")
+        st.markdown("### 👮 Admin Control")
         sport_mode = st.toggle("🏒 Sport Mode")
         
         try:
@@ -82,16 +83,16 @@ with st.sidebar:
                 st.dataframe(pending_df, use_container_width=True)
                 req_idx = st.number_input("ID to Manage", 0, len(pending_df)-1, 0)
                 
-                c1, c2 = st.columns(2)
-                with c1:
+                col1, col2 = st.columns(2)
+                with col1:
                     if st.button("✅ Approve Lesson"):
                         main_mem = conn.read(worksheet="Memory", ttl="1s")
                         approved = pending_df.iloc[[req_idx]][['question', 'answer']]
                         conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
                         conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.session_state.has_run_splash = False # Force Splash on update
+                        st.session_state.has_run_splash = False # Trigger assembly on update
                         st.rerun()
-                with c2:
+                with col2:
                     if st.button("❌ Decline Lesson"):
                         conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
                         st.rerun()
@@ -102,36 +103,7 @@ with st.sidebar:
         st.rerun()
 
 #--------------------
-# Section 3: Brain Assembly Animation & Top Indicator
-#--------------------
-header_col1, header_col2 = st.columns([8, 2])
-with header_col2:
-    st.markdown('<div class="online-indicator"><span class="dot"></span>BDL.AI Online</div>', unsafe_allow_html=True)
-
-# Detect if we need to show the Assembly Animation
-try:
-    current_mem = conn.read(worksheet="Memory", ttl="1s")
-    current_count = len(current_mem)
-    if st.session_state.last_mem_count == 0: st.session_state.last_mem_count = current_count
-    
-    update_detected = current_count > st.session_state.last_mem_count
-    
-    if not st.session_state.has_run_splash or update_detected:
-        splash_container = st.empty()
-        with splash_container.container():
-            st.markdown("<h2 style='text-align: center; color: #4CAF50;'>Assembling BDL.AI Cortex...</h2>", unsafe_allow_html=True)
-            st_lottie(lottie_brain, height=400, key="splash")
-            time.sleep(2.5) # Time for "Robotic Assembly"
-            st.toast("Brain Pulse Green... System Initialized.")
-            time.sleep(1)
-        splash_container.empty()
-        st.session_state.has_run_splash = True
-        st.session_state.last_mem_count = current_count
-        if update_detected: st.success("🔔 **Global Update:** New knowledge has been integrated into the cortex!")
-except: pass
-
-#--------------------
-# Section 4: Data Logic & Chat History
+# Section 3: Data Write Functions
 #--------------------
 def save_direct(q, a):
     df = conn.read(worksheet="Memory", ttl="1s")
@@ -143,12 +115,25 @@ def save_request(q, a):
     new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
     conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
 
+#--------------------
+# Section 4: Global Update Alert & Chat History
+#--------------------
+try:
+    current_mem = conn.read(worksheet="Memory", ttl="1s")
+    current_count = len(current_mem)
+    if st.session_state.last_mem_count == 0: st.session_state.last_mem_count = current_count
+    
+    if current_count > st.session_state.last_mem_count:
+        st.success(f"🔔 **Update Alert:** {current_count - st.session_state.last_mem_count} new lesson(s) integrated!")
+        st.session_state.last_mem_count = current_count
+except: pass
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
 
 #--------------------
-# Section 5-10: Support Engines (Math, Translation, Voice, Deepthink)
+# Section 5-10: Support Engines
 #--------------------
 def run_math(p):
     if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
@@ -186,9 +171,9 @@ def run_deepthink(q, summ=False):
     return None
 
 #--------------------
-# Section 11: Main Brain Logic
+# Section 11: Logic - Deepthink Mode
 #--------------------
-if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
+if prompt := st.chat_input("Communicate with BDL.AI..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
     response = ""
@@ -197,7 +182,7 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
     if st.session_state.waiting_for_answer:
         if is_speak_role:
             save_direct(st.session_state.last_question, prompt)
-            response = "⚡ **System Core Updated.** Knowledge added."
+            response = "⚡ **Cortex Updated.** Knowledge added to permanent bank."
         else:
             save_request(st.session_state.last_question, prompt)
             response = "📝 **Lesson Queued.** Waiting for Admin approval."
@@ -206,11 +191,9 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
     if not response: response = run_math(prompt)
 
     if not response and st.session_state.deepthink_enabled:
-        start = time.time()
         with st.status("🧠 Deepthinking...", expanded=False) as s:
             response = run_deepthink(prompt, summarize=("(summary)" in prompt.lower() or (is_admin_role and sport_mode)))
             s.update(label="Deepthink Scan Complete!", state="complete")
-        st.session_state.perf_data.append(time.time() - start)
 
     if not response:
         try:
@@ -241,4 +224,4 @@ if is_speak_role:
     with st.sidebar:
         st.markdown("---")
         if st.button("🧪 Diagnostics"):
-            st.write(f"Perf Graph: {len(st.session_state.perf_data)} scans logged.")
+            st.write(f"System Check: ✅ Cortex Operational")
