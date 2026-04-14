@@ -9,32 +9,37 @@ import io, re, wikipedia, wikipediaapi, time, requests
 from datetime import datetime
 
 #--------------------
-# Section 0: Splash Animation (Robotic Brain)
+# Section 0: Splash Animation (With Safety Gate)
 #--------------------
 def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200: return None
-    return r.json()
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code != 200: return None
+        return r.json()
+    except:
+        return None
 
-# This is a high-tech robotic assembly animation
-lottie_brain = load_lottieurl("https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json")
+# High-tech robotic assembly animation link
+LOTTIE_URL = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
+lottie_brain = load_lottieurl(LOTTIE_URL)
 
 if "has_run_splash" not in st.session_state: st.session_state.has_run_splash = False
 
 def run_brain_assembly():
+    # Only run if it hasn't run yet AND we actually have the animation data
     if not st.session_state.has_run_splash:
-        splash_container = st.empty()
-        with splash_container.container():
-            st.markdown("<h2 style='text-align: center; color: #4CAF50;'>Assembling BDL.AI Cortex...</h2>", unsafe_allow_html=True)
-            st_lottie(lottie_brain, height=400, key="initial_assembly")
-            time.sleep(3) # Let the robotic arms finish the work
-            st.toast("Brain Pulse: GREEN. Connection Established.")
-            time.sleep(1)
-        splash_container.empty()
+        if lottie_brain:
+            splash_container = st.empty()
+            with splash_container.container():
+                st.markdown("<h2 style='text-align: center; color: #4CAF50;'>Assembling BDL.AI Cortex...</h2>", unsafe_allow_html=True)
+                st_lottie(lottie_brain, height=400, key="initial_assembly")
+                time.sleep(3) 
+                st.toast("System: Initialized.")
+            splash_container.empty()
         st.session_state.has_run_splash = True
 
 #--------------------
-# Section 1: Setup & CSS
+# Section 1: Setup & CSS (Online Indicator)
 #--------------------
 st.set_page_config(page_title="BDL.AI Master Brain", layout="wide", page_icon="🧠")
 
@@ -47,13 +52,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Run the robotic assembly animation
+# Try to run the assembly (Safe Mode)
 run_brain_assembly()
 
 # Top Indicator
 st.markdown('<div class="online-indicator"><span class="dot"></span>BDL.AI Online</div>', unsafe_allow_html=True)
 
-# Session States
+# Initialize Session States
 if "messages" not in st.session_state: st.session_state.messages = []
 if "waiting_for_answer" not in st.session_state: st.session_state.waiting_for_answer = False
 if "last_question" not in st.session_state: st.session_state.last_question = ""
@@ -64,7 +69,7 @@ if "last_mem_count" not in st.session_state: st.session_state.last_mem_count = 0
 #--------------------
 with st.sidebar:
     st.title("⚙️ BDL.AI Setting Panel")
-    access_key = st.text_input("Access Key", type="password")
+    access_key = st.text_input("Enter Access Key", type="password")
     is_speak_role = (access_key == "qwerty")
     is_admin_role = (access_key == "admin") or is_speak_role 
     
@@ -92,7 +97,7 @@ with st.sidebar:
                         approved = pending_df.iloc[[req_idx]][['question', 'answer']]
                         conn.update(worksheet="Memory", data=pd.concat([main_mem, approved], ignore_index=True))
                         conn.update(worksheet="Requests", data=pending_df.drop(pending_df.index[req_idx]))
-                        st.session_state.has_run_splash = False # Reset splash to show brain assembly again
+                        st.session_state.has_run_splash = False 
                         st.rerun()
                 with c2:
                     if st.button("❌ Decline Lesson"):
@@ -104,11 +109,72 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# [Sections 3-10 remain exactly as in V6.4 for Data, Math, Translation, and Deepthink logic]
-# (Section 3: Data Write, Section 4: History, Section 5: Math, Section 6: Translation, 
-# Section 7: Voice, Section 8: UI Helpers, Section 9: Deepthink, Section 10: Local Read)
+#--------------------
+# Section 3: Data Write Functions
+#--------------------
+def save_direct(q, a):
+    df = conn.read(worksheet="Memory", ttl="1s")
+    new_row = pd.DataFrame([{"question": q.lower(), "answer": a}])
+    conn.update(worksheet="Memory", data=pd.concat([df, new_row], ignore_index=True))
 
-# (Add your logic functions here as they were before...)
+def save_request(q, a):
+    df = conn.read(worksheet="Requests", ttl="1s")
+    new_req = pd.DataFrame([{"question": q.lower(), "answer": a, "user": "User", "timestamp": datetime.now().strftime("%H:%M")}])
+    conn.update(worksheet="Requests", data=pd.concat([df, new_req], ignore_index=True))
+
+#--------------------
+# Section 4: Global Update Alert & Chat History
+#--------------------
+try:
+    current_mem = conn.read(worksheet="Memory", ttl="1s")
+    current_count = len(current_mem)
+    if st.session_state.last_mem_count == 0: st.session_state.last_mem_count = current_count
+    if current_count > st.session_state.last_mem_count:
+        st.success(f"🔔 **Update Alert:** {current_count - st.session_state.last_mem_count} new lesson(s) integrated!")
+        st.session_state.last_mem_count = current_count
+except: pass
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"], unsafe_allow_html=True)
+
+#--------------------
+# Section 5-10: Support Engines
+#--------------------
+def run_math(p):
+    if re.match(r"^[\d\+\-\*\/\(\)\s\.]+$", p.strip()):
+        try: return f"🔢 **Result:** {pd.eval(p)}"
+        except: return None
+    return None
+
+def get_hebrew(t):
+    try: return GoogleTranslator(source='auto', target='iw').translate(t[:800])
+    except: return None
+
+def show_voices(e, h):
+    v1, v2 = st.columns(2)
+    with v1:
+        try:
+            tts_e = gTTS(e[:3000], lang='en'); f_e = io.BytesIO(); tts_e.write_to_fp(f_e); st.audio(f_e)
+        except: pass
+    if h:
+        with v2:
+            try:
+                tts_h = gTTS(h, lang='iw'); f_h = io.BytesIO(); tts_h.write_to_fp(f_h); st.audio(f_h)
+            except: pass
+
+def run_deepthink(q, summ=False):
+    wiki = wikipediaapi.Wikipedia('BDL-Bot/1.0', 'en'); wikipedia.set_lang("en")
+    limit = 1200 if summ else 15000
+    clean_q = q.lower().replace("(summary)", "")
+    for n in ['what is', 'who is', '?']: clean_q = clean_q.replace(n, "")
+    try:
+        s = wikipedia.search(clean_q.strip())
+        if s:
+            p = wiki.page(s[0])
+            if p.exists(): return f"### 🧠 DEEPTHINK REPORT: {p.title}\n\n" + (p.summary if summ else p.text)[:limit]
+    except: return None
+    return None
 
 #--------------------
 # Section 11: Logic - Deepthink Mode
@@ -132,7 +198,6 @@ if prompt := st.chat_input("Communicate with BDL.AI Master Brain..."):
 
     if not response and st.session_state.deepthink_enabled:
         with st.status("🧠 Deepthinking...", expanded=False) as s:
-            # Note: Deepthink logic goes out to Wikipedia/Internet
             response = run_deepthink(prompt, summarize=("(summary)" in prompt.lower() or (is_admin_role and sport_mode)))
             s.update(label="Deepthink Scan Complete!", state="complete")
 
