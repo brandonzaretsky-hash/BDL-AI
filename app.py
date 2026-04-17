@@ -64,7 +64,7 @@ def apply_theme(style_type):
                 margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
             }
             
-            /* UPDATED CAUTION TAPE: High Contrast Naomi Orange & Black */
+            /* CAUTION TAPE PROTOCOL */
             .dev-box {
                 position: relative; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center;
@@ -122,7 +122,7 @@ def show_voices(e, t, code):
             except: pass
 
 #--------------------
-# PAGE: NEXUS HOME
+# PAGE: NEXUS HOME (Gateway)
 #--------------------
 def show_nexus_home():
     apply_theme("cyberpunk")
@@ -143,7 +143,7 @@ def show_nexus_home():
     
     c1, c2, c3 = st.columns(3)
     with c1:
-        # BDL Icon
+        # BOT 1: BDL STANDARD
         st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/bot.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### BDL")
         st.caption("The original, but still great.")
@@ -151,7 +151,7 @@ def show_nexus_home():
             st.session_state.page = "BDL Standard"; st.rerun()
             
     with c2:
-        # Deepthink Icon
+        # BOT 2: DEEPTHINK
         st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/brain.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### DEEPTHINK")
         st.caption("A web scanning powerhouse.")
@@ -159,11 +159,12 @@ def show_nexus_home():
             st.session_state.page = "BDL Deepthink"; st.rerun()
             
     with c3:
-        # DNA Icon (Fixed URL)
+        # BOT 3: DNA (Emoji Fix)
+        # Using a large emoji ensures robust loading across all devices.
         st.markdown("""
-            <div class='dev-box'>
+            <div class='dev-box' style='height: 150px;'>
                 <div class='caution-tape'>DEV-ONLY</div>
-                <img src='https://img.icons8.com/external-flat-icons-maxicons/120/external-dna-medical-flat-icons-maxicons.png' width='120' style='filter: hue-rotate(280deg) saturate(5);'/>
+                <div style='font-size: 100px; text-align: center;'>🧬</div>
             </div>
             """, unsafe_allow_html=True)
         st.markdown("### DNA")
