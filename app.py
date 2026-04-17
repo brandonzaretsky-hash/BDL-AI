@@ -13,7 +13,6 @@ from datetime import datetime
 #--------------------
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🧠")
 
-# Initialize global states
 state_defaults = {
     "page": "Nexus Home",
     "messages": [],
@@ -30,7 +29,7 @@ for key, value in state_defaults.items():
         st.session_state[key] = value
 
 #--------------------
-# Section 2: Visual Themes (Cyberpunk Chroma)
+# Section 2: Visual Themes
 #--------------------
 def apply_theme(style_type):
     if style_type == "cyberpunk":
@@ -82,6 +81,9 @@ def apply_theme(style_type):
                 font-size: 16px; z-index: 10;
             }
             .dot { height: 10px; width: 10px; background-color: #00FFFF; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00FFFF; }
+            
+            /* Admin Panel Styling */
+            .admin-header { color: #FF8C00 !important; border-bottom: 2px solid #FF8C00; margin-top: 50px; padding-bottom: 10px; }
             </style>
             """, unsafe_allow_html=True)
     else:
@@ -127,16 +129,24 @@ def run_deepthink_engine(q, sport=False):
         if not search_results: return "❌ No matching grid entries found."
         page = wiki_wiki.page(search_results[0])
         if not page.exists(): return "❌ Data stream offline."
-        
         if sport: return f"🏃 **Sport Mode Summary:**\n\n{page.summary[:1500]}..."
         else: return f"📑 **Full Deepthink Analysis:**\n\n{page.text[:5000]}..."
     except Exception as e: return f"🚨 **Grid Error:** {str(e)}"
 
 #--------------------
-# PAGE: NEXUS HOME
+# PAGE: NEXUS HOME (With Admin Commands)
 #--------------------
 def show_nexus_home():
     apply_theme("cyberpunk")
+    
+    with st.sidebar:
+        st.title("🔑 Access Panel")
+        access_key = st.text_input("Enter Credentials", type="password")
+        is_admin = (access_key == "admin") or (access_key == "qwerty")
+        is_dev = (access_key == "qwerty")
+        st.markdown("---")
+        st.caption("Standard users do not require credentials for BDL/Deepthink modules.")
+
     st.markdown("<h1>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
     st.markdown("<div class='online-indicator'><span class='dot'></span>CORTEX ACTIVE</div>", unsafe_allow_html=True)
     
@@ -160,7 +170,56 @@ def show_nexus_home():
         if st.button("🔌 INITIALIZE DEEPTHINK"): st.session_state.page = "BDL Deepthink"; st.rerun()
     with c3:
         st.markdown("""<div class='bot-card'><div class='dev-box'><div class='caution-tape'>DEV-ONLY</div><div style='font-size: 80px;'>🧬</div></div><h2 style='margin-top:10px;'>DNA</h2><p>An all-in-one cortex.</p></div>""", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DNA"): st.session_state.page = "BDL DNA"; st.rerun()
+        if st.button("🔌 INITIALIZE DNA"): 
+            if is_dev: st.session_state.page = "BDL DNA"; st.rerun()
+            else: st.warning("Requires Super-Dev Credentials.")
+
+    # --- ADMIN COMMAND CENTER (REQUESTS) ---
+    if is_admin:
+        st.markdown("<h2 class='admin-header'>🛠️ NEXUS ADMIN COMMAND</h2>", unsafe_allow_html=True)
+        t1, t2 = st.tabs(["📝 Q&A Requests", "📚 Cortex Training"])
+        
+        with t1:
+            try:
+                pending_qa = conn.read(worksheet="Requests", ttl="1s")
+                if not pending_qa.empty:
+                    st.dataframe(pending_qa, use_container_width=True)
+                    qa_idx = st.number_input("Lesson ID", 0, len(pending_qa)-1, 0, key="qa_sel")
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("✅ Approve Lesson"):
+                            mem = conn.read(worksheet="Memory", ttl="1s")
+                            row = pending_qa.iloc[[qa_idx]][['question', 'answer']]
+                            conn.update(worksheet="Memory", data=pd.concat([mem, row], ignore_index=True))
+                            conn.update(worksheet="Requests", data=pending_qa.drop(pending_qa.index[qa_idx]))
+                            st.rerun()
+                    with b2:
+                        if st.button("❌ Decline Lesson"):
+                            conn.update(worksheet="Requests", data=pending_qa.drop(pending_qa.index[qa_idx]))
+                            st.rerun()
+                else: st.info("No pending Q&A lessons.")
+            except: st.error("Requests worksheet not found.")
+
+        with t2:
+            try:
+                pending_ctx = conn.read(worksheet="ContextRequests", ttl="1s")
+                if not pending_ctx.empty:
+                    st.dataframe(pending_ctx, use_container_width=True)
+                    ctx_idx = st.number_input("Cortex ID", 0, len(pending_ctx)-1, 0, key="ctx_sel")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("✅ Approve Context"):
+                            core = conn.read(worksheet="Context", ttl="1s")
+                            row = pending_ctx.iloc[[ctx_idx]][['Topic', 'Meaning']]
+                            conn.update(worksheet="Context", data=pd.concat([core, row], ignore_index=True))
+                            conn.update(worksheet="ContextRequests", data=pending_ctx.drop(pending_ctx.index[ctx_idx]))
+                            st.rerun()
+                    with c2:
+                        if st.button("❌ Decline Context"):
+                            conn.update(worksheet="ContextRequests", data=pending_ctx.drop(pending_ctx.index[ctx_idx]))
+                            st.rerun()
+                else: st.info("No pending cortex blocks.")
+            except: st.error("ContextRequests worksheet not found.")
 
 #--------------------
 # PAGE: BDL STANDARD
@@ -172,7 +231,6 @@ def show_bdl_standard():
     
     with st.sidebar:
         st.markdown("### 🌍 Language Engine")
-        # UPDATED: Added "None" option
         lang_map = {"None": "none", "Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru", "Japanese": "ja"}
         choice = st.selectbox("Select Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
@@ -196,7 +254,6 @@ def show_bdl_standard():
         
         if not response: response = "I haven't learned that lesson yet."
         
-        # Display logic based on Language Selection
         if st.session_state.target_lang_code != "none":
             trans = get_translation(response, st.session_state.target_lang_code)
             full = f"{response}\n\n---\n**Translation ({choice}):** {trans}"
@@ -236,15 +293,8 @@ def show_bdl_dna():
     apply_theme("cyberpunk")
     if st.sidebar.button("⬅️ EXIT TO NEXUS"): st.session_state.page = "Nexus Home"; st.rerun()
     st.title("🧬 BDL DNA")
-    if not st.session_state.dna_unlocked:
-        st.error("🛑 ACCESS DENIED.")
-        pw = st.text_input("ENTER PASSWORD", type="password")
-        if st.button("UNLOCK"):
-            if pw == "qwerty": st.session_state.dna_unlocked = True; st.rerun()
-            else: st.error("INCORRECT.")
-    else:
-        st.success("🟢 DNA UNLOCKED.")
-        st.chat_input("DNA Synthesis Input...")
+    st.success("🟢 DNA UNLOCKED. Cortex Synthesis Active.")
+    st.chat_input("DNA Synthesis Input...")
 
 #--------------------
 # ROUTER
