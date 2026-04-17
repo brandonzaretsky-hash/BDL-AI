@@ -29,7 +29,7 @@ for key, value in state_defaults.items():
         st.session_state[key] = value
 
 #--------------------
-# Section 2: Visual Themes
+# Section 2: Visual Themes (Cyberpunk Chroma)
 #--------------------
 def apply_theme(style_type):
     if style_type == "cyberpunk":
@@ -44,45 +44,14 @@ def apply_theme(style_type):
             h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; margin-bottom: 0px !important; }
             h2, h3, .online-indicator { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; text-align: center; }
             p, span, div, li { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #00ff41; }
-
-            section[data-testid="stSidebar"] {
-                background-color: #051a05;
-                border-right: 2px solid #FF8C00; 
-            }
-            
-            .stButton>button {
-                background-color: #000; color: #00FFFF;
-                border: 1px solid #00FFFF; box-shadow: 0 0 15px #00FFFF;
-                width: 100%; height: 50px;
-            }
-            .stButton>button:hover {
-                border: 1px solid #FF8C00; color: #FF8C00; box-shadow: 0 0 20px #FF8C00;
-            }
-
-            .intel-counter {
-                font-size: 50px; text-align: center;
-                border: 2px solid #00ff41; padding: 20px; border-radius: 15px;
-                box-shadow: inset 0 0 30px rgba(0, 255, 65, 0.3), 0 0 20px rgba(0, 255, 65, 0.2);
-                margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
-            }
-            
-            .bot-card {
-                height: 250px; display: flex; flex-direction: column;
-                justify-content: center; align-items: center;
-                text-align: center; margin-bottom: 10px;
-            }
-
+            section[data-testid="stSidebar"] { background-color: #051a05; border-right: 2px solid #FF8C00; }
+            .stButton>button { background-color: #000; color: #00FFFF; border: 1px solid #00FFFF; box-shadow: 0 0 15px #00FFFF; width: 100%; height: 50px; }
+            .stButton>button:hover { border: 1px solid #FF8C00; color: #FF8C00; box-shadow: 0 0 20px #FF8C00; }
+            .intel-counter { font-size: 50px; text-align: center; border: 2px solid #00ff41; padding: 20px; border-radius: 15px; box-shadow: inset 0 0 30px rgba(0, 255, 65, 0.3), 0 0 20px rgba(0, 255, 65, 0.2); margin-bottom: 30px; background: rgba(0, 255, 65, 0.03); }
+            .bot-card { height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; margin-bottom: 10px; }
             .dev-box { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-            .caution-tape {
-                position: absolute; top: 45px; left: -25px; width: 200px; height: 30px;
-                background-color: #FF8C00; color: #000; font-weight: 1000;
-                transform: rotate(-25deg); text-align: center; line-height: 30px;
-                box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif;
-                font-size: 16px; z-index: 10;
-            }
+            .caution-tape { position: absolute; top: 45px; left: -25px; width: 200px; height: 30px; background-color: #FF8C00; color: #000; font-weight: 1000; transform: rotate(-25deg); text-align: center; line-height: 30px; box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif; font-size: 16px; z-index: 10; }
             .dot { height: 10px; width: 10px; background-color: #00FFFF; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00FFFF; }
-            
-            /* Admin Panel Styling */
             .admin-header { color: #FF8C00 !important; border-bottom: 2px solid #FF8C00; margin-top: 50px; padding-bottom: 10px; }
             </style>
             """, unsafe_allow_html=True)
@@ -105,6 +74,17 @@ def get_total_intelligence():
         c = conn.read(worksheet="Context", ttl="1s")
         return len(m) + len(c)
     except: return 0
+
+def save_context_request(topic, meaning, conn):
+    """Saves to GSheets - Optimized for header consistency"""
+    df = conn.read(worksheet="ContextRequests", ttl="1s")
+    new_req = pd.DataFrame([{
+        "Topic": str(topic).strip(),
+        "Meaning": str(meaning).strip(),
+        "User": "External",
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M")
+    }])
+    conn.update(worksheet="ContextRequests", data=pd.concat([df, new_req], ignore_index=True))
 
 def get_translation(text, target):
     try: return GoogleTranslator(source='auto', target=target).translate(text[:800])
@@ -134,7 +114,7 @@ def run_deepthink_engine(q, sport=False):
     except Exception as e: return f"🚨 **Grid Error:** {str(e)}"
 
 #--------------------
-# PAGE: NEXUS HOME (With Admin Commands)
+# PAGE: NEXUS HOME (Gateway)
 #--------------------
 def show_nexus_home():
     apply_theme("cyberpunk")
@@ -145,7 +125,7 @@ def show_nexus_home():
         is_admin = (access_key == "admin") or (access_key == "qwerty")
         is_dev = (access_key == "qwerty")
         st.markdown("---")
-        st.caption("Standard users do not require credentials for BDL/Deepthink modules.")
+        st.caption("Nexus Terminal 1.0.4")
 
     st.markdown("<h1>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
     st.markdown("<div class='online-indicator'><span class='dot'></span>CORTEX ACTIVE</div>", unsafe_allow_html=True)
@@ -174,11 +154,9 @@ def show_nexus_home():
             if is_dev: st.session_state.page = "BDL DNA"; st.rerun()
             else: st.warning("Requires Super-Dev Credentials.")
 
-    # --- ADMIN COMMAND CENTER (REQUESTS) ---
     if is_admin:
         st.markdown("<h2 class='admin-header'>🛠️ NEXUS ADMIN COMMAND</h2>", unsafe_allow_html=True)
         t1, t2 = st.tabs(["📝 Q&A Requests", "📚 Cortex Training"])
-        
         with t1:
             try:
                 pending_qa = conn.read(worksheet="Requests", ttl="1s")
@@ -197,9 +175,7 @@ def show_nexus_home():
                         if st.button("❌ Decline Lesson"):
                             conn.update(worksheet="Requests", data=pending_qa.drop(pending_qa.index[qa_idx]))
                             st.rerun()
-                else: st.info("No pending Q&A lessons.")
-            except: st.error("Requests worksheet not found.")
-
+            except: st.error("Requests Tab Sync Error.")
         with t2:
             try:
                 pending_ctx = conn.read(worksheet="ContextRequests", ttl="1s")
@@ -218,8 +194,7 @@ def show_nexus_home():
                         if st.button("❌ Decline Context"):
                             conn.update(worksheet="ContextRequests", data=pending_ctx.drop(pending_ctx.index[ctx_idx]))
                             st.rerun()
-                else: st.info("No pending cortex blocks.")
-            except: st.error("ContextRequests worksheet not found.")
+            except: st.error("ContextRequests Tab Sync Error.")
 
 #--------------------
 # PAGE: BDL STANDARD
@@ -230,11 +205,23 @@ def show_bdl_standard():
     st.title("🤖 BDL Standard")
     
     with st.sidebar:
-        st.markdown("### 🌍 Language Engine")
+        st.markdown("### 🌍 Language Matrix")
         lang_map = {"None": "none", "Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru", "Japanese": "ja"}
         choice = st.selectbox("Select Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
         voice_on = st.toggle("🔊 Speaking Mode", value=True)
+        
+        # RESTORED: Universal Training Expander
+        st.markdown("---")
+        with st.expander("📚 Universal Cortex Training"):
+            st.caption("Contribute knowledge paragraphs to the DNA Cortex.")
+            u_topic = st.text_input("Topic Name", key="ut_fixed")
+            u_meaning = st.text_area("Detailed Context", key="um_fixed")
+            if st.button("Submit to Nexus"):
+                if u_topic and u_meaning:
+                    save_context_request(u_topic, u_meaning, conn)
+                    st.success("Module sent for review.")
+        
         if st.button("🗑️ Clear Chat"): st.session_state.messages = []; st.rerun()
 
     for msg in st.session_state.messages:
@@ -243,7 +230,6 @@ def show_bdl_standard():
     if prompt := st.chat_input("Communicate..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
-        
         response = ""
         try:
             df = conn.read(worksheet="Memory", ttl="1s")
@@ -251,15 +237,13 @@ def show_bdl_standard():
             match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
             if score >= 85: response = df[df['question'] == match].iloc[-1]['answer']
         except: pass
-        
-        if not response: response = "I haven't learned that lesson yet."
+        if not response: response = "I haven't learned that yet."
         
         if st.session_state.target_lang_code != "none":
             trans = get_translation(response, st.session_state.target_lang_code)
-            full = f"{response}\n\n---\n**Translation ({choice}):** {trans}"
+            full = f"{response}\n\n---\n**Translation:** {trans}"
         else:
-            trans = None
-            full = response
+            trans = None; full = response
             
         with st.chat_message("assistant"):
             st.markdown(full)
@@ -273,7 +257,6 @@ def show_bdl_deepthink():
     apply_theme("cyberpunk")
     if st.sidebar.button("⬅️ EXIT TO NEXUS"): st.session_state.page = "Nexus Home"; st.rerun()
     st.title("🧠 BDL Deepthink")
-    
     with st.sidebar:
         st.markdown("### 🏒 Performance Panel")
         st.session_state.deepthink_sport = st.toggle("🏃 Sport Mode", value=st.session_state.deepthink_sport)
