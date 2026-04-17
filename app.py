@@ -13,7 +13,6 @@ from datetime import datetime
 #--------------------
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🧠")
 
-# Initialize global states to prevent AttributeErrors
 state_defaults = {
     "page": "Nexus Home",
     "messages": [],
@@ -37,10 +36,10 @@ def apply_theme(style_type):
             .stApp {
                 background-color: #000000;
                 background-image: 
-                    radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.1) 0%, rgba(0, 0, 0, 1) 70%),
+                    radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.12) 0%, rgba(0, 0, 0, 1) 70%),
                     linear-gradient(180deg, #000 0%, #051a05 100%);
             }
-            h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; }
+            h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; }
             h2, h3, .online-indicator { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; }
             p, span, div, li { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #00ff41; }
 
@@ -65,17 +64,21 @@ def apply_theme(style_type):
                 margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
             }
             
+            /* UPDATED CAUTION TAPE: High Contrast Naomi Orange & Black */
             .dev-box {
                 position: relative; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center;
-                border: 2px solid #FFD700; padding: 15px; border-radius: 10px;
+                border: 2px solid #FF8C00; padding: 15px; border-radius: 10px;
+                background: rgba(255, 140, 0, 0.05);
             }
             .caution-tape {
-                position: absolute; top: 20px; left: -30px;
-                width: 180px; height: 30px;
-                background-color: #FFD700; color: #000; font-weight: bold;
-                transform: rotate(-30deg); text-align: center; line-height: 30px;
-                box-shadow: 0 0 15px #FFD700; font-family: 'Impact', sans-serif;
+                position: absolute; top: 35px; left: -35px;
+                width: 220px; height: 35px;
+                background-color: #FF8C00; color: #000; font-weight: 1000;
+                transform: rotate(-30deg); text-align: center; line-height: 35px;
+                box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif;
+                font-size: 18px; letter-spacing: 2px;
+                z-index: 10;
             }
             .online-indicator { font-weight: bold; text-align: right; margin-bottom: 10px; }
             .dot { height: 10px; width: 10px; background-color: #00FFFF; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00FFFF; }
@@ -129,6 +132,7 @@ def show_nexus_home():
     score = get_total_intelligence()
     st.markdown(f"<div class='intel-counter'><span>{score}</span><br><span style='font-size: 16px;'>SYNTHESIZED LESSONS IN CORTEX</span></div>", unsafe_allow_html=True)
 
+    # Pulsing Brain animation
     l_url = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
     try:
         r = requests.get(l_url, timeout=5)
@@ -139,21 +143,29 @@ def show_nexus_home():
     
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/bot.png'/></div>", unsafe_allow_html=True)
+        # BDL Icon
+        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/bot.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### BDL")
         st.caption("The original, but still great.")
         if st.button("🔌 INITIALIZE BDL"):
             st.session_state.page = "BDL Standard"; st.rerun()
             
     with c2:
-        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/brain.png'/></div>", unsafe_allow_html=True)
+        # Deepthink Icon
+        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/brain.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### DEEPTHINK")
         st.caption("A web scanning powerhouse.")
         if st.button("🔌 INITIALIZE DEEPTHINK"):
             st.session_state.page = "BDL Deepthink"; st.rerun()
             
     with c3:
-        st.markdown("<div class='dev-box'><div class='caution-tape'>DEV-MODE</div><img src='https://img.icons8.com/neon/120/dna.png'/></div>", unsafe_allow_html=True)
+        # DNA Icon (Fixed URL)
+        st.markdown("""
+            <div class='dev-box'>
+                <div class='caution-tape'>DEV-ONLY</div>
+                <img src='https://img.icons8.com/external-flat-icons-maxicons/120/external-dna-medical-flat-icons-maxicons.png' width='120' style='filter: hue-rotate(280deg) saturate(5);'/>
+            </div>
+            """, unsafe_allow_html=True)
         st.markdown("### DNA")
         st.caption("An all-in-one cortex.")
         if st.button("🔌 INITIALIZE DNA"):
@@ -184,7 +196,6 @@ def show_bdl_standard():
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
-        # Memory Check
         response = ""
         try:
             df = conn.read(worksheet="Memory", ttl="1s")
