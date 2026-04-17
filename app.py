@@ -20,14 +20,16 @@ state_defaults = {
     "dna_unlocked": False,
     "target_lang_code": "iw",
     "waiting_for_answer": False,
-    "last_question": ""
+    "last_question": "",
+    "deepthink_sport": False,
+    "deepthink_strictness": 85
 }
 for key, value in state_defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
 #--------------------
-# Section 2: Visual Themes (Alignment Fixes Included)
+# Section 2: Visual Themes (Cyberpunk Chroma)
 #--------------------
 def apply_theme(style_type):
     if style_type == "cyberpunk":
@@ -64,31 +66,20 @@ def apply_theme(style_type):
                 margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
             }
             
-            /* ALIGNMENT CARD PROTOCOL */
             .bot-card {
-                height: 250px; /* Forces all bot headers/icons to the same height */
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                text-align: center;
-                margin-bottom: 10px;
+                height: 250px; display: flex; flex-direction: column;
+                justify-content: center; align-items: center;
+                text-align: center; margin-bottom: 10px;
             }
 
-            .dev-box {
-                position: relative; display: flex; flex-direction: column; 
-                align-items: center; justify-content: center;
-                background: transparent;
-            }
+            .dev-box { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
             .caution-tape {
-                position: absolute; top: 45px; left: -25px;
-                width: 200px; height: 30px;
+                position: absolute; top: 45px; left: -25px; width: 200px; height: 30px;
                 background-color: #FF8C00; color: #000; font-weight: 1000;
                 transform: rotate(-25deg); text-align: center; line-height: 30px;
                 box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif;
                 font-size: 16px; z-index: 10;
             }
-            .online-indicator { font-weight: bold; text-align: right; margin-bottom: 10px; }
             .dot { height: 10px; width: 10px; background-color: #00FFFF; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00FFFF; }
             </style>
             """, unsafe_allow_html=True)
@@ -97,7 +88,6 @@ def apply_theme(style_type):
             <style>
             .online-indicator { display: flex; align-items: center; justify-content: flex-end; color: #4CAF50; font-weight: bold; padding: 10px; }
             .dot { height: 10px; width: 10px; background-color: #4CAF50; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 8px #4CAF50; animation: pulse 2s infinite; }
-            @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
             </style>
             """, unsafe_allow_html=True)
 
@@ -129,8 +119,35 @@ def show_voices(e, t, code):
                 tts_t = gTTS(t, lang=code); f_t = io.BytesIO(); tts_t.write_to_fp(f_t); st.audio(f_t)
             except: pass
 
+def run_deepthink_engine(q, sport=False):
+    """Robust Wikipedia search for Deepthink mode."""
+    # Initialize with user agent for Wikipedia API stability
+    wiki_wiki = wikipediaapi.Wikipedia(
+        user_agent='BDL-AI/1.0 (contact: bdl_nexus@example.com)',
+        language='en'
+    )
+    try:
+        # Step 1: Search for the best title
+        search_results = wikipedia.search(q, results=3)
+        if not search_results:
+            return "❌ No matching grid entries found for that topic."
+        
+        # Step 2: Fetch the page content
+        page = wiki_wiki.page(search_results[0])
+        
+        if not page.exists():
+            return "❌ The data stream exists but the content is currently offline."
+        
+        if sport:
+            return f"🏃 **Sport Mode Summary:**\n\n{page.summary[:1500]}..."
+        else:
+            return f"📑 **Full Deepthink Analysis:**\n\n{page.text[:5000]}..."
+            
+    except Exception as e:
+        return f"🚨 **Grid Error:** System couldn't parse the web request. ({str(e)})"
+
 #--------------------
-# PAGE: NEXUS HOME (Calibration Fix)
+# PAGE: NEXUS HOME
 #--------------------
 def show_nexus_home():
     apply_theme("cyberpunk")
@@ -148,42 +165,20 @@ def show_nexus_home():
 
     st.markdown("<h3 style='margin-top: 20px;'>SELECT BOT MODULE TO ACTIVATE:</h3>", unsafe_allow_html=True)
     
-    # Using fixed ratios to prevent horizontal shifting
     c1, c2, c3 = st.columns([1, 1, 1])
     
     with c1:
-        st.markdown("""
-            <div class='bot-card'>
-                <img src='https://img.icons8.com/neon/120/bot.png' width='100'/>
-                <h2 style='margin-top:10px;'>BDL</h2>
-                <p>The original, but still great.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("""<div class='bot-card'><img src='https://img.icons8.com/neon/120/bot.png' width='100'/><h2 style='margin-top:10px;'>BDL</h2><p>The original, but still great.</p></div>""", unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE BDL"):
             st.session_state.page = "BDL Standard"; st.rerun()
             
     with c2:
-        st.markdown("""
-            <div class='bot-card'>
-                <img src='https://img.icons8.com/neon/120/brain.png' width='100'/>
-                <h2 style='margin-top:10px;'>DEEPTHINK</h2>
-                <p>A web scanning powerhouse.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("""<div class='bot-card'><img src='https://img.icons8.com/neon/120/brain.png' width='100'/><h2 style='margin-top:10px;'>DEEPTHINK</h2><p>A web scanning powerhouse.</p></div>""", unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE DEEPTHINK"):
             st.session_state.page = "BDL Deepthink"; st.rerun()
             
     with c3:
-        st.markdown("""
-            <div class='bot-card'>
-                <div class='dev-box'>
-                    <div class='caution-tape'>DEV-ONLY</div>
-                    <div style='font-size: 80px;'>🧬</div>
-                </div>
-                <h2 style='margin-top:10px;'>DNA</h2>
-                <p>An all-in-one cortex.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("""<div class='bot-card'><div class='dev-box'><div class='caution-tape'>DEV-ONLY</div><div style='font-size: 80px;'>🧬</div></div><h2 style='margin-top:10px;'>DNA</h2><p>An all-in-one cortex.</p></div>""", unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE DNA"):
             st.session_state.page = "BDL DNA"; st.rerun()
 
@@ -198,8 +193,9 @@ def show_bdl_standard():
     st.title("🤖 BDL Standard")
     
     with st.sidebar:
-        st.markdown("### 🌍 Language Matrix")
-        lang_map = {"Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru"}
+        st.markdown("### 🌍 Language Engine")
+        # NEW OPTION: Japanese added to matrix
+        lang_map = {"Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru", "Japanese": "ja"}
         choice = st.selectbox("Select Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
         voice_on = st.toggle("🔊 Speaking Mode", value=True)
@@ -230,7 +226,7 @@ def show_bdl_standard():
         st.session_state.messages.append({"role": "assistant", "content": full})
 
 #--------------------
-# PAGE: DEEPTHINK
+# PAGE: DEEPTHINK (Fixed & Upgraded)
 #--------------------
 def show_bdl_deepthink():
     apply_theme("cyberpunk")
@@ -238,13 +234,22 @@ def show_bdl_deepthink():
         st.session_state.page = "Nexus Home"; st.rerun()
     
     st.title("🧠 BDL Deepthink")
-    prompt = st.chat_input("Scan Topic...")
+    
+    with st.sidebar:
+        st.markdown("### 🏒 Performance Panel")
+        st.session_state.deepthink_sport = st.toggle("🏃 Sport Mode (Brevity)", value=st.session_state.deepthink_sport)
+        st.session_state.deepthink_strictness = st.slider("🔍 Scan Strictness", 50, 100, st.session_state.deepthink_strictness)
+        st.markdown("---")
+        st.caption("Sport mode focuses on key summaries, while normal mode pulls full context data.")
+
+    prompt = st.chat_input("Enter Topic for Global Web Scan...")
     if prompt:
-        with st.status("📡 Scanning Web Grid...", expanded=True):
-            wikipedia.set_lang("en")
-            search = wikipedia.search(prompt)
-            res = wikipedia.page(search[0]).summary if search else "No data."
-        st.markdown(f"### 🔍 SCAN RESULT\n\n{res}")
+        with st.chat_message("user"): st.markdown(prompt)
+        with st.status("📡 Rerouting through Global Grid...", expanded=True):
+            res = run_deepthink_engine(prompt, sport=st.session_state.deepthink_sport)
+        
+        with st.chat_message("assistant"):
+            st.markdown(res)
 
 #--------------------
 # PAGE: DNA
