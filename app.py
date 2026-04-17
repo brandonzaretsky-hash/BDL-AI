@@ -144,7 +144,7 @@ def run_deepthink_summ(q):
 def show_nexus_home():
     apply_theme("cyberpunk")
     st.markdown("<h1 style='text-align: center; margin-bottom: 0;'>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
-    st.markdown("<div class='online-indicator'><span class="dot"></span>CORTEX ACTIVE</div>", unsafe_allow_html=True)
+   st.markdown("<div class='online-indicator'><span class='dot'></span>CORTEX ACTIVE</div>", unsafe_allow_html=True)
     
     # Intelligence Counter Protocol
     intel_score = get_total_intelligence()
