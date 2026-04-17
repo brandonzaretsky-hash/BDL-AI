@@ -27,7 +27,7 @@ for key, value in state_defaults.items():
         st.session_state[key] = value
 
 #--------------------
-# Section 2: Visual Themes (Cyberpunk Chroma)
+# Section 2: Visual Themes (Alignment Fixes Included)
 #--------------------
 def apply_theme(style_type):
     if style_type == "cyberpunk":
@@ -39,19 +39,19 @@ def apply_theme(style_type):
                     radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.12) 0%, rgba(0, 0, 0, 1) 70%),
                     linear-gradient(180deg, #000 0%, #051a05 100%);
             }
-            h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; }
-            h2, h3, .online-indicator { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; }
+            h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; margin-bottom: 0px !important; }
+            h2, h3, .online-indicator { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; text-align: center; }
             p, span, div, li { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #00ff41; }
 
             section[data-testid="stSidebar"] {
                 background-color: #051a05;
-                border-right: 2px solid #FF8C00;
+                border-right: 2px solid #FF8C00; 
             }
             
             .stButton>button {
                 background-color: #000; color: #00FFFF;
                 border: 1px solid #00FFFF; box-shadow: 0 0 15px #00FFFF;
-                width: 100%;
+                width: 100%; height: 50px;
             }
             .stButton>button:hover {
                 border: 1px solid #FF8C00; color: #FF8C00; box-shadow: 0 0 20px #FF8C00;
@@ -64,21 +64,29 @@ def apply_theme(style_type):
                 margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
             }
             
-            /* CLEAN DEV BOX: No border, no background */
+            /* ALIGNMENT CARD PROTOCOL */
+            .bot-card {
+                height: 250px; /* Forces all bot headers/icons to the same height */
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                margin-bottom: 10px;
+            }
+
             .dev-box {
                 position: relative; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center;
-                padding: 15px; border-radius: 10px;
                 background: transparent;
             }
             .caution-tape {
-                position: absolute; top: 35px; left: -35px;
-                width: 220px; height: 35px;
+                position: absolute; top: 45px; left: -25px;
+                width: 200px; height: 30px;
                 background-color: #FF8C00; color: #000; font-weight: 1000;
-                transform: rotate(-30deg); text-align: center; line-height: 35px;
+                transform: rotate(-25deg); text-align: center; line-height: 30px;
                 box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif;
-                font-size: 18px; letter-spacing: 2px;
-                z-index: 10;
+                font-size: 16px; z-index: 10;
             }
             .online-indicator { font-weight: bold; text-align: right; margin-bottom: 10px; }
             .dot { height: 10px; width: 10px; background-color: #00FFFF; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #00FFFF; }
@@ -122,7 +130,7 @@ def show_voices(e, t, code):
             except: pass
 
 #--------------------
-# PAGE: NEXUS HOME (Gateway)
+# PAGE: NEXUS HOME (Calibration Fix)
 #--------------------
 def show_nexus_home():
     apply_theme("cyberpunk")
@@ -135,36 +143,47 @@ def show_nexus_home():
     l_url = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
     try:
         r = requests.get(l_url, timeout=5)
-        if r.status_code == 200: st_lottie(r.json(), height=220, speed=1.2)
+        if r.status_code == 200: st_lottie(r.json(), height=200, speed=1.2)
     except: pass
 
-    st.markdown("<h3 style='text-align: center; margin-top: 20px;'>SELECT BOT MODULE TO ACTIVATE:</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-top: 20px;'>SELECT BOT MODULE TO ACTIVATE:</h3>", unsafe_allow_html=True)
     
-    c1, col_gap, c2, col_gap2, c3 = st.columns([1, 0.2, 1, 0.2, 1])
+    # Using fixed ratios to prevent horizontal shifting
+    c1, c2, c3 = st.columns([1, 1, 1])
+    
     with c1:
-        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/bot.png' width='120'/></div>", unsafe_allow_html=True)
-        st.markdown("### BDL")
-        st.caption("The original, but still great.")
+        st.markdown("""
+            <div class='bot-card'>
+                <img src='https://img.icons8.com/neon/120/bot.png' width='100'/>
+                <h2 style='margin-top:10px;'>BDL</h2>
+                <p>The original, but still great.</p>
+            </div>
+            """, unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE BDL"):
             st.session_state.page = "BDL Standard"; st.rerun()
             
     with c2:
-        st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/brain.png' width='120'/></div>", unsafe_allow_html=True)
-        st.markdown("### DEEPTHINK")
-        st.caption("A web scanning powerhouse.")
+        st.markdown("""
+            <div class='bot-card'>
+                <img src='https://img.icons8.com/neon/120/brain.png' width='100'/>
+                <h2 style='margin-top:10px;'>DEEPTHINK</h2>
+                <p>A web scanning powerhouse.</p>
+            </div>
+            """, unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE DEEPTHINK"):
             st.session_state.page = "BDL Deepthink"; st.rerun()
             
     with c3:
-        # CLEAN DNA Icon: Transparent container, Emoji DNA
         st.markdown("""
-            <div class='dev-box' style='height: 150px;'>
-                <div class='caution-tape'>DEV-ONLY</div>
-                <div style='font-size: 100px; text-align: center;'>🧬</div>
+            <div class='bot-card'>
+                <div class='dev-box'>
+                    <div class='caution-tape'>DEV-ONLY</div>
+                    <div style='font-size: 80px;'>🧬</div>
+                </div>
+                <h2 style='margin-top:10px;'>DNA</h2>
+                <p>An all-in-one cortex.</p>
             </div>
             """, unsafe_allow_html=True)
-        st.markdown("### DNA")
-        st.caption("An all-in-one cortex.")
         if st.button("🔌 INITIALIZE DNA"):
             st.session_state.page = "BDL DNA"; st.rerun()
 
