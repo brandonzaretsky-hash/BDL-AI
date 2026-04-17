@@ -13,12 +13,13 @@ from datetime import datetime
 #--------------------
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🧠")
 
+# Initialize global states
 state_defaults = {
     "page": "Nexus Home",
     "messages": [],
     "has_run_splash": False,
     "dna_unlocked": False,
-    "target_lang_code": "iw",
+    "target_lang_code": "none",
     "waiting_for_answer": False,
     "last_question": "",
     "deepthink_sport": False,
@@ -107,44 +108,29 @@ def get_translation(text, target):
     try: return GoogleTranslator(source='auto', target=target).translate(text[:800])
     except: return None
 
-def show_voices(e, t, code):
+def show_voices(e, t, code, choice):
     v1, v2 = st.columns(2)
     with v1:
         try:
             tts_e = gTTS(e[:3000], lang='en'); f_e = io.BytesIO(); tts_e.write_to_fp(f_e); st.audio(f_e)
         except: pass
-    if t:
+    if t and choice != "None":
         with v2:
             try:
                 tts_t = gTTS(t, lang=code); f_t = io.BytesIO(); tts_t.write_to_fp(f_t); st.audio(f_t)
             except: pass
 
 def run_deepthink_engine(q, sport=False):
-    """Robust Wikipedia search for Deepthink mode."""
-    # Initialize with user agent for Wikipedia API stability
-    wiki_wiki = wikipediaapi.Wikipedia(
-        user_agent='BDL-AI/1.0 (contact: bdl_nexus@example.com)',
-        language='en'
-    )
+    wiki_wiki = wikipediaapi.Wikipedia(user_agent='BDL-AI/1.0', language='en')
     try:
-        # Step 1: Search for the best title
         search_results = wikipedia.search(q, results=3)
-        if not search_results:
-            return "❌ No matching grid entries found for that topic."
-        
-        # Step 2: Fetch the page content
+        if not search_results: return "❌ No matching grid entries found."
         page = wiki_wiki.page(search_results[0])
+        if not page.exists(): return "❌ Data stream offline."
         
-        if not page.exists():
-            return "❌ The data stream exists but the content is currently offline."
-        
-        if sport:
-            return f"🏃 **Sport Mode Summary:**\n\n{page.summary[:1500]}..."
-        else:
-            return f"📑 **Full Deepthink Analysis:**\n\n{page.text[:5000]}..."
-            
-    except Exception as e:
-        return f"🚨 **Grid Error:** System couldn't parse the web request. ({str(e)})"
+        if sport: return f"🏃 **Sport Mode Summary:**\n\n{page.summary[:1500]}..."
+        else: return f"📑 **Full Deepthink Analysis:**\n\n{page.text[:5000]}..."
+    except Exception as e: return f"🚨 **Grid Error:** {str(e)}"
 
 #--------------------
 # PAGE: NEXUS HOME
@@ -164,38 +150,30 @@ def show_nexus_home():
     except: pass
 
     st.markdown("<h3 style='margin-top: 20px;'>SELECT BOT MODULE TO ACTIVATE:</h3>", unsafe_allow_html=True)
-    
     c1, c2, c3 = st.columns([1, 1, 1])
     
     with c1:
         st.markdown("""<div class='bot-card'><img src='https://img.icons8.com/neon/120/bot.png' width='100'/><h2 style='margin-top:10px;'>BDL</h2><p>The original, but still great.</p></div>""", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE BDL"):
-            st.session_state.page = "BDL Standard"; st.rerun()
-            
+        if st.button("🔌 INITIALIZE BDL"): st.session_state.page = "BDL Standard"; st.rerun()
     with c2:
         st.markdown("""<div class='bot-card'><img src='https://img.icons8.com/neon/120/brain.png' width='100'/><h2 style='margin-top:10px;'>DEEPTHINK</h2><p>A web scanning powerhouse.</p></div>""", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DEEPTHINK"):
-            st.session_state.page = "BDL Deepthink"; st.rerun()
-            
+        if st.button("🔌 INITIALIZE DEEPTHINK"): st.session_state.page = "BDL Deepthink"; st.rerun()
     with c3:
         st.markdown("""<div class='bot-card'><div class='dev-box'><div class='caution-tape'>DEV-ONLY</div><div style='font-size: 80px;'>🧬</div></div><h2 style='margin-top:10px;'>DNA</h2><p>An all-in-one cortex.</p></div>""", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DNA"):
-            st.session_state.page = "BDL DNA"; st.rerun()
+        if st.button("🔌 INITIALIZE DNA"): st.session_state.page = "BDL DNA"; st.rerun()
 
 #--------------------
 # PAGE: BDL STANDARD
 #--------------------
 def show_bdl_standard():
     apply_theme("standard")
-    if st.sidebar.button("⬅️ EXIT TO NEXUS"):
-        st.session_state.page = "Nexus Home"; st.rerun()
-    
+    if st.sidebar.button("⬅️ EXIT TO NEXUS"): st.session_state.page = "Nexus Home"; st.rerun()
     st.title("🤖 BDL Standard")
     
     with st.sidebar:
         st.markdown("### 🌍 Language Engine")
-        # NEW OPTION: Japanese added to matrix
-        lang_map = {"Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru", "Japanese": "ja"}
+        # UPDATED: Added "None" option
+        lang_map = {"None": "none", "Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru", "Japanese": "ja"}
         choice = st.selectbox("Select Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
         voice_on = st.toggle("🔊 Speaking Mode", value=True)
@@ -218,55 +196,51 @@ def show_bdl_standard():
         
         if not response: response = "I haven't learned that lesson yet."
         
-        trans = get_translation(response, st.session_state.target_lang_code)
-        full = f"{response}\n\n---\n**Translation:** {trans}"
+        # Display logic based on Language Selection
+        if st.session_state.target_lang_code != "none":
+            trans = get_translation(response, st.session_state.target_lang_code)
+            full = f"{response}\n\n---\n**Translation ({choice}):** {trans}"
+        else:
+            trans = None
+            full = response
+            
         with st.chat_message("assistant"):
             st.markdown(full)
-            if voice_on: show_voices(response, trans, st.session_state.target_lang_code)
+            if voice_on: show_voices(response, trans, st.session_state.target_lang_code, choice)
         st.session_state.messages.append({"role": "assistant", "content": full})
 
 #--------------------
-# PAGE: DEEPTHINK (Fixed & Upgraded)
+# PAGE: DEEPTHINK
 #--------------------
 def show_bdl_deepthink():
     apply_theme("cyberpunk")
-    if st.sidebar.button("⬅️ EXIT TO NEXUS"):
-        st.session_state.page = "Nexus Home"; st.rerun()
-    
+    if st.sidebar.button("⬅️ EXIT TO NEXUS"): st.session_state.page = "Nexus Home"; st.rerun()
     st.title("🧠 BDL Deepthink")
     
     with st.sidebar:
         st.markdown("### 🏒 Performance Panel")
-        st.session_state.deepthink_sport = st.toggle("🏃 Sport Mode (Brevity)", value=st.session_state.deepthink_sport)
+        st.session_state.deepthink_sport = st.toggle("🏃 Sport Mode", value=st.session_state.deepthink_sport)
         st.session_state.deepthink_strictness = st.slider("🔍 Scan Strictness", 50, 100, st.session_state.deepthink_strictness)
-        st.markdown("---")
-        st.caption("Sport mode focuses on key summaries, while normal mode pulls full context data.")
 
     prompt = st.chat_input("Enter Topic for Global Web Scan...")
     if prompt:
         with st.chat_message("user"): st.markdown(prompt)
-        with st.status("📡 Rerouting through Global Grid...", expanded=True):
+        with st.status("📡 Rerouting...", expanded=True):
             res = run_deepthink_engine(prompt, sport=st.session_state.deepthink_sport)
-        
-        with st.chat_message("assistant"):
-            st.markdown(res)
+        with st.chat_message("assistant"): st.markdown(res)
 
 #--------------------
 # PAGE: DNA
 #--------------------
 def show_bdl_dna():
     apply_theme("cyberpunk")
-    if st.sidebar.button("⬅️ EXIT TO NEXUS"):
-        st.session_state.page = "Nexus Home"; st.rerun()
-    
+    if st.sidebar.button("⬅️ EXIT TO NEXUS"): st.session_state.page = "Nexus Home"; st.rerun()
     st.title("🧬 BDL DNA")
     if not st.session_state.dna_unlocked:
-        st.error("🛑 ACCESS DENIED: Restricted Development Mode.")
+        st.error("🛑 ACCESS DENIED.")
         pw = st.text_input("ENTER PASSWORD", type="password")
         if st.button("UNLOCK"):
-            if pw == "qwerty":
-                st.session_state.dna_unlocked = True
-                st.rerun()
+            if pw == "qwerty": st.session_state.dna_unlocked = True; st.rerun()
             else: st.error("INCORRECT.")
     else:
         st.success("🟢 DNA UNLOCKED.")
@@ -275,11 +249,7 @@ def show_bdl_dna():
 #--------------------
 # ROUTER
 #--------------------
-if st.session_state.page == "Nexus Home":
-    show_nexus_home()
-elif st.session_state.page == "BDL Standard":
-    show_bdl_standard()
-elif st.session_state.page == "BDL Deepthink":
-    show_bdl_deepthink()
-elif st.session_state.page == "BDL DNA":
-    show_bdl_dna()
+if st.session_state.page == "Nexus Home": show_nexus_home()
+elif st.session_state.page == "BDL Standard": show_bdl_standard()
+elif st.session_state.page == "BDL Deepthink": show_bdl_deepthink()
+elif st.session_state.page == "BDL DNA": show_bdl_dna()
