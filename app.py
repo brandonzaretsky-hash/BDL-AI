@@ -45,7 +45,7 @@ def apply_theme(style_type):
 
             section[data-testid="stSidebar"] {
                 background-color: #051a05;
-                border-right: 2px solid #FF8C00; /* Naomi Orange */
+                border-right: 2px solid #FF8C00;
             }
             
             .stButton>button {
@@ -64,12 +64,12 @@ def apply_theme(style_type):
                 margin-bottom: 30px; background: rgba(0, 255, 65, 0.03);
             }
             
-            /* CAUTION TAPE PROTOCOL */
+            /* CLEAN DEV BOX: No border, no background */
             .dev-box {
                 position: relative; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center;
-                border: 2px solid #FF8C00; padding: 15px; border-radius: 10px;
-                background: rgba(255, 140, 0, 0.05);
+                padding: 15px; border-radius: 10px;
+                background: transparent;
             }
             .caution-tape {
                 position: absolute; top: 35px; left: -35px;
@@ -132,7 +132,6 @@ def show_nexus_home():
     score = get_total_intelligence()
     st.markdown(f"<div class='intel-counter'><span>{score}</span><br><span style='font-size: 16px;'>SYNTHESIZED LESSONS IN CORTEX</span></div>", unsafe_allow_html=True)
 
-    # Pulsing Brain animation
     l_url = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
     try:
         r = requests.get(l_url, timeout=5)
@@ -141,9 +140,8 @@ def show_nexus_home():
 
     st.markdown("<h3 style='text-align: center; margin-top: 20px;'>SELECT BOT MODULE TO ACTIVATE:</h3>", unsafe_allow_html=True)
     
-    c1, c2, c3 = st.columns(3)
+    c1, col_gap, c2, col_gap2, c3 = st.columns([1, 0.2, 1, 0.2, 1])
     with c1:
-        # BOT 1: BDL STANDARD
         st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/bot.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### BDL")
         st.caption("The original, but still great.")
@@ -151,7 +149,6 @@ def show_nexus_home():
             st.session_state.page = "BDL Standard"; st.rerun()
             
     with c2:
-        # BOT 2: DEEPTHINK
         st.markdown("<div align='center'><img src='https://img.icons8.com/neon/120/brain.png' width='120'/></div>", unsafe_allow_html=True)
         st.markdown("### DEEPTHINK")
         st.caption("A web scanning powerhouse.")
@@ -159,8 +156,7 @@ def show_nexus_home():
             st.session_state.page = "BDL Deepthink"; st.rerun()
             
     with c3:
-        # BOT 3: DNA (Emoji Fix)
-        # Using a large emoji ensures robust loading across all devices.
+        # CLEAN DNA Icon: Transparent container, Emoji DNA
         st.markdown("""
             <div class='dev-box' style='height: 150px;'>
                 <div class='caution-tape'>DEV-ONLY</div>
@@ -183,7 +179,7 @@ def show_bdl_standard():
     st.title("🤖 BDL Standard")
     
     with st.sidebar:
-        st.markdown("### 🌍 Language Engine")
+        st.markdown("### 🌍 Language Matrix")
         lang_map = {"Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN", "Russian": "ru"}
         choice = st.selectbox("Select Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
