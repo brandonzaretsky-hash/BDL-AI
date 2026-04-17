@@ -9,11 +9,10 @@ import io, re, wikipedia, wikipediaapi, time, requests
 from datetime import datetime
 
 #--------------------
-# Section 1: Session State & Routing Defaults
+# Section 1: Setup & Session State
 #--------------------
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🌐")
 
-# Initialize global states
 state_defaults = {
     "page": "Nexus Home",
     "messages": [],
@@ -26,12 +25,11 @@ for key, value in state_defaults.items():
         st.session_state[key] = value
 
 #--------------------
-# Section 2: Core Shared Engines
+# Section 2: Shared Core Engines (With Fixes)
 #--------------------
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_total_intelligence():
-    """Calculates total lessons + context blocks learned."""
     try:
         mem_df = conn.read(worksheet="Memory", ttl="1s")
         ctx_df = conn.read(worksheet="Context", ttl="1s")
@@ -54,6 +52,28 @@ def show_voices(e, t, lang_code):
                 tts_t = gTTS(t, lang=lang_code); f_t = io.BytesIO(); tts_t.write_to_fp(f_t); st.audio(f_t)
             except: pass
 
+def run_deepthink_safe(q):
+    """Deepthink engine with Disambiguation protection."""
+    try:
+        wikipedia.set_lang("en")
+        search_results = wikipedia.search(q.strip())
+        if not search_results:
+            return "No data found in the global grid."
+        
+        try:
+            # Try to get the first page
+            page = wikipedia.page(search_results[0], auto_suggest=False)
+            return page.summary
+        except wikipedia.DisambiguationError as e:
+            # If it's a 'choice' page, pick the first actual option
+            first_option = e.options[0]
+            page = wikipedia.page(first_option, auto_suggest=False)
+            return f"*(Context: {first_option})*\n\n" + page.summary
+        except wikipedia.PageError:
+            return "Target located but the data stream is corrupted (Page Error)."
+    except Exception as e:
+        return f"Grid Scan Error: {str(e)}"
+
 #--------------------
 # Section 3: Visual Themes
 #--------------------
@@ -66,6 +86,7 @@ def apply_theme(style_type):
             h1, h2, h3, p, span, div { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 8px #00ff41; }
             .stButton>button { background-color: #000; color: #00ff41; border: 1px solid #00ff41; box-shadow: 0 0 15px #00ff41; width: 100%; }
             .intel-counter { font-size: 60px; text-align: center; border: 2px solid #00ff41; padding: 20px; border-radius: 15px; box-shadow: inset 0 0 20px #00ff41; margin-bottom: 30px; }
+            .stStatus { border: 1px solid #00ff41 !important; background: #000 !important; }
             </style>
             """, unsafe_allow_html=True)
     else:
@@ -73,7 +94,6 @@ def apply_theme(style_type):
             <style>
             .online-indicator { display: flex; align-items: center; justify-content: flex-end; color: #4CAF50; font-weight: bold; padding: 10px; }
             .dot { height: 10px; width: 10px; background-color: #4CAF50; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 8px #4CAF50; animation: pulse 2s infinite; }
-            @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
             </style>
             """, unsafe_allow_html=True)
 
@@ -84,33 +104,25 @@ def show_nexus_home():
     apply_theme("cyberpunk")
     st.markdown("<h1 style='text-align: center;'>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
     
-    # Intelligence High Score
     intel_score = get_total_intelligence()
-    st.markdown(f"<div class='intel-counter'>{intel_score}<br><span style='font-size: 20px;'>SYNTHESIZED LESSONS IN CORTEX</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='intel-counter'>{intel_score}<br><span style='font-size: 20px;'>SYNTHESIZED LESSONS</span></div>", unsafe_allow_html=True)
 
-    # Brain Assembly Animation
     l_url = "https://lottie.host/8040d6c1-9031-4e76-9051-177b966b96e4/ZzQoUvV6wZ.json"
     r = requests.get(l_url); l_json = r.json() if r.status_code == 200 else None
     if l_json: st_lottie(l_json, height=250)
 
-    st.markdown("<h3 style='text-align: center; margin-top: 20px;'>Select Bot Module:</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; margin-top: 20px;'>Select Bot Cortex:</h3>", unsafe_allow_html=True)
     
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("### 🤖 BDL")
-        st.caption("Standard Q&A + Translation")
-        if st.button("INITIALIZE BDL"):
-            st.session_state.page = "BDL Standard"; st.rerun()
+        if st.button("INITIALIZE BDL"): st.session_state.page = "BDL Standard"; st.rerun()
     with c2:
         st.markdown("### 🧠 DEEPTHINK")
-        st.caption("Global Internet Scan Mode")
-        if st.button("INITIALIZE DEEPTHINK"):
-            st.session_state.page = "BDL Deepthink"; st.rerun()
+        if st.button("INITIALIZE DEEPTHINK"): st.session_state.page = "BDL Deepthink"; st.rerun()
     with c3:
         st.markdown("### 🧬 DNA")
-        st.caption("Experimental Synthesis Lab")
-        if st.button("INITIALIZE DNA"):
-            st.session_state.page = "BDL DNA"; st.rerun()
+        if st.button("INITIALIZE DNA"): st.session_state.page = "BDL DNA"; st.rerun()
 
 #--------------------
 # PAGE: BDL STANDARD
@@ -123,46 +135,36 @@ def show_bdl_standard():
     st.title("🤖 BDL Standard")
     
     with st.sidebar:
-        st.markdown("### 🌍 Translation Matrix")
-        # Every language in the world (Main codes)
-        lang_map = {
-            "Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Italian": "it", 
-            "Arabic": "ar", "Chinese": "zh-CN", "Japanese": "ja", "Russian": "ru", "Portuguese": "pt",
-            "Hindi": "hi", "Dutch": "nl", "Greek": "el", "Turkish": "tr", "Korean": "ko"
-        }
-        choice = st.selectbox("Select Target Language", list(lang_map.keys()))
+        st.markdown("### 🌍 Language Selection")
+        lang_map = {"Hebrew": "iw", "French": "fr", "Spanish": "es", "German": "de", "Arabic": "ar", "Chinese": "zh-CN"}
+        choice = st.selectbox("Language", list(lang_map.keys()))
         st.session_state.target_lang_code = lang_map[choice]
-        voice_on = st.toggle("🔊 Speaking Mode", value=True)
-        if st.button("🗑️ Reset Chat"): st.session_state.messages = []; st.rerun()
+        voice_on = st.toggle("🔊 Voice", value=True)
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ask BDL..."):
+    if prompt := st.chat_input("Communicate..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
-        # Local Memory Lookup
-        response = ""
+        # Simple Q&A
         try:
             df = conn.read(worksheet="Memory", ttl="1s")
             qs = df['question'].fillna('').tolist()
             match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
-            if score >= 85: response = df[df['question'] == match].iloc[-1]['answer']
-        except: pass
-        
-        if not response: response = "I haven't been taught that specific lesson yet."
+            response = df[df['question'] == match].iloc[-1]['answer'] if score >= 85 else "I don't know that yet."
+        except: response = "Memory offline."
         
         trans = get_translation(response, st.session_state.target_lang_code)
-        full = f"{response}\n\n---\n**Translation ({choice}):** {trans}"
-        
+        full = f"{response}\n\n---\n**{choice}:** {trans}"
         with st.chat_message("assistant"):
             st.markdown(full)
             if voice_on: show_voices(response, trans, st.session_state.target_lang_code)
         st.session_state.messages.append({"role": "assistant", "content": full})
 
 #--------------------
-# PAGE: BDL DEEPTHINK
+# PAGE: BDL DEEPTHINK (FIXED)
 #--------------------
 def show_bdl_deepthink():
     apply_theme("cyberpunk")
@@ -170,20 +172,16 @@ def show_bdl_deepthink():
         st.session_state.page = "Nexus Home"; st.rerun()
     
     st.title("🧠 BDL Deepthink")
-    st.markdown("---")
     
-    prompt = st.chat_input("Enter Topic for Global Deep Scan...")
+    prompt = st.chat_input("Scan Topic...")
     if prompt:
         with st.chat_message("user"): st.markdown(prompt)
-        with st.status("📡 Rerouting through Wikipedia Grid...", expanded=True):
-            wikipedia.set_lang("en")
-            search = wikipedia.search(prompt)
-            if search:
-                res = wikipedia.page(search[0]).summary
-            else: res = "No data found in the global grid."
+        with st.status("📡 Searching Global Archives...", expanded=True) as s:
+            res = run_deepthink_safe(prompt)
+            s.update(label="Scan Complete", state="complete")
         
         with st.chat_message("assistant"):
-            st.markdown(f"### 🔍 SCAN RESULT\n\n{res}")
+            st.markdown(f"### 🔍 REPORT\n\n{res}")
 
 #--------------------
 # PAGE: BDL DNA
@@ -196,26 +194,20 @@ def show_bdl_dna():
     st.title("🧬 BDL DNA")
     
     if not st.session_state.dna_unlocked:
-        st.error("🛑 ACCESS DENIED: BDL DNA is currently in restricted development mode.")
-        pw = st.text_input("ENTER SUPER-DEV OVERRIDE CODE", type="password")
-        if st.button("AUTHORIZE"):
+        st.error("🛑 Restricted Access")
+        pw = st.text_input("Enter Passkey", type="password")
+        if st.button("UNLOCK"):
             if pw == "qwerty":
-                st.session_state.dna_unlocked = True
-                st.rerun()
-            else: st.error("CODE INCORRECT.")
+                st.session_state.dna_unlocked = True; st.rerun()
+            else: st.error("Access Denied")
     else:
-        st.success("🟢 ACCESS GRANTED. Thorough Think Synthesis Active.")
-        st.info("This bot uses Contextual Synthesis to build custom replies from your Context Bank.")
-        # DNA Specific logic would follow here
+        st.success("🟢 Lab Unlocked")
+        st.info("DNA-Specific synthesis active.")
 
 #--------------------
-# THE NEXUS ROUTER
+# ROUTER
 #--------------------
-if st.session_state.page == "Nexus Home":
-    show_nexus_home()
-elif st.session_state.page == "BDL Standard":
-    show_bdl_standard()
-elif st.session_state.page == "BDL Deepthink":
-    show_bdl_deepthink()
-elif st.session_state.page == "BDL DNA":
-    show_bdl_dna()
+if st.session_state.page == "Nexus Home": show_nexus_home()
+elif st.session_state.page == "BDL Standard": show_bdl_standard()
+elif st.session_state.page == "BDL Deepthink": show_bdl_deepthink()
+elif st.session_state.page == "BDL DNA": show_bdl_dna()
