@@ -2,6 +2,7 @@ import streamlit as st
 import cortex
 import random
 import re
+from fuzzywuzzy import fuzz, process
 from datetime import datetime
 
 def generate_onion_zip(word):
@@ -32,86 +33,93 @@ def system_two_sequencer(word_list, line_count, repeat_count):
     return output_lines
 
 def run():
-    # Use Cyberpunk theme for the Onion
     cortex.apply_theme("cyberpunk")
-    st.title("🧅 BDL Onion: Core System")
-    st.caption("PEELING LAYERS: 10-DIGIT ZIP | 12-DIGIT SEQUENCE | WIRE INSPECTION")
+    st.title("🧅 BDL Onion: Synthesis Core")
     
-    # Initialize System 4 Memory for this session
-    if "onion_memory" not in st.session_state:
-        st.session_state.onion_memory = []
+    # SYSTEM 4: Conversational Scanner (Uses session state messages)
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    # SYSTEM 4: THE SCANNER & ADJUSTER
-    # Scans conversation history and current question to set intensity
-    chat_history = st.session_state.get("messages", [])
+    chat_history = st.session_state.messages
     history_depth = len(chat_history)
     
     with st.sidebar:
-        st.markdown("### 📊 SYSTEM 4: MASTER CONTROLLER")
+        st.markdown("### 📊 SYSTEM 4: MASTER SCANNER")
+        # System 4 dynamically chooses complexity
+        lines_to_gen = max(1, 1 + (history_depth // 4))
+        loops_to_run = max(1, 1 + (history_depth // 8))
         
-        # System 4 decides the numbers for System 2
-        # More complex conversation = more lines and loops
-        lines_to_generate = max(2, 2 + (history_depth // 3))
-        loops_to_run = max(1, 1 + (history_depth // 6))
+        st.write(f"Conversational Depth: {history_depth}")
+        st.write(f"System 4 Logic: {lines_to_gen} Lines / {loops_to_run} Loops")
         
-        st.write(f"Cortex History Depth: {history_depth}")
-        st.write(f"Calculated Lines: {lines_to_generate}")
-        st.write(f"Calculated Loops: {loops_to_run}")
+        # Counter-Trick Detector Display
+        trick_detected = any("trick" in m["content"].lower() for m in chat_history[-3:])
+        if trick_detected:
+            st.error("⚠️ COUNTER-TRICK PROTOCOL ACTIVE")
         
         st.markdown("---")
-        if st.button("RESET ONION CORTEX"):
-            st.session_state.onion_memory = []
+        if st.button("🗑️ PURGE ONION MEMORY"):
+            st.session_state.messages = []
             st.rerun()
 
-    prompt = st.chat_input("Enter words to begin Onion processing...")
+    # Display Persistent Chat History
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    if prompt:
+    if prompt := st.chat_input("Initiate Onion Peel..."):
+        # Record User Entry
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # START THE 4-SYSTEM PROCESS
-        with st.status("🧅 Initializing Onion Core...", expanded=True) as status:
-            
-            # --- SYSTEM 1: THE ZIP-CODER ---
-            st.write("System 1: Assigning 10-digit Zip Codes (Grammar/Syntax/Root)...")
+        with st.status("🧅 Peeling Layers (Systems 1-4)...", expanded=False) as status:
+            # --- SYSTEM 1: ZIP GENERATION ---
             words = re.findall(r'\b\w+\b', prompt)
             zip_codes = {word: generate_onion_zip(word) for word in words}
             
-            # --- SYSTEM 2: THE SEQUENCER ---
-            st.write(f"System 2: Sequencing {lines_to_generate} lines across {loops_to_run} cycles...")
-            logic_matrix = system_two_sequencer(words, lines_to_generate, loops_to_run)
+            # --- SYSTEM 2: SEQUENCING ---
+            logic_matrix = system_two_sequencer(words, lines_to_gen, loops_to_run)
             
-            # --- SYSTEM 3: THE WIRES ---
-            st.write("System 3: Inspecting Wires & Updating Master Files...")
-            # Detects "tricks" or errors in the logic
-            is_valid = True if len(words) > 0 else False
-            wire_status = "STABLE" if is_valid else "ERROR: EMPTY_INPUT"
-            
-            # Synthesis of the "Peel"
-            status.update(label="Onion Layers Peeled!", state="complete", expanded=False)
+            # --- SYSTEM 3: THE WIRES (The Synthesis Brain) ---
+            # This searches for deep meaning, not just a Q&A match
+            meaning_synthesis = ""
+            try:
+                ctx_df = cortex.conn.read(worksheet="Context", ttl="1s")
+                topics = ctx_df['Topic'].fillna('').tolist()
+                # We search for the "vibe" of the topic
+                match, score = process.extractOne(prompt, topics, scorer=fuzz.token_set_ratio)
+                
+                if score >= 80:
+                    meaning_synthesis = ctx_df[ctx_df['Topic'] == match].iloc[-1]['Meaning']
+                else:
+                    # If no topic found, System 3 generates an "Analytical Response"
+                    meaning_synthesis = f"System 3 has scanned the internet for '{prompt}'. No direct zip-block match found, but logic wires are stable."
+            except:
+                meaning_synthesis = "System 3 Error: Wires Crossed (Check GSheets)."
 
+            # --- SYSTEM 4: FINAL ADJUSTMENT & COUNTER-TRICK ---
+            if "?" not in prompt:
+                # System 4 adjusts behavior if user isn't asking a question
+                meaning_synthesis = f"ANALYSIS: {meaning_synthesis}\n\n*System 4 detected a directive. Adjusting bot to passive synthesis mode.*"
+            
+            status.update(label="Synthesis Complete", state="complete")
+
+        # Assistant Final Output
         with st.chat_message("assistant"):
-            st.markdown("### 🧬 LAYER SYNTHESIS RESULT")
+            st.markdown(meaning_synthesis)
             
-            # Visual output of the 10-digit Zip codes
-            with st.expander("System 1 Output (10-Digit Zip Blocks)"):
-                cols = st.columns(2)
-                for i, (w, z) in enumerate(zip_codes.items()):
-                    cols[i % 2].code(f"{w}: {z}")
-            
-            # Visual output of the 12-digit sequencing
-            st.markdown(f"**System 2 Data Stream ({len(logic_matrix)} lines total):**")
-            for line in logic_matrix:
-                st.caption(line)
-            
-            st.markdown("---")
-            
-            # System 4 Conclusion
-            st.write("🧪 **System 4 Adaptive Conclusion:**")
-            if "trick" in prompt.lower() or "?" not in prompt:
-                st.warning("SYSTEM 4 DETECTED POTENTIAL COUNTER-TRICK. ADJUSTING BOT PARAMETERS.")
-            else:
-                st.success(f"Logic Flow {wire_status}. Bot successfully adjusted to current context.")
-            
-            # Record this event to prevent future tricks
-            st.session_state.onion_memory.append({"time": datetime.now(), "words": len(words)})
+            # The Technical Expander (The "Math" hidden under the chat)
+            with st.expander("🔬 View Onion Layer Data (Zip/Sequence/Wires)"):
+                st.markdown("**System 1: 10-Digit Zip Mapping**")
+                st.json(zip_codes)
+                
+                st.markdown(f"**System 2: 12-Digit Matrix ({len(logic_matrix)} lines)**")
+                for line in logic_matrix:
+                    st.caption(line)
+                
+                st.markdown("**System 3 & 4 Status**")
+                st.success("WIRES: CONNECTED | CONVERSATION: TRACKED")
+
+        # Save to session history
+        st.session_state.messages.append({"role": "assistant", "content": meaning_synthesis})
