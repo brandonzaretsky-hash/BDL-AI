@@ -1,51 +1,50 @@
 import streamlit as st
-import cortex  # THIS MUST BE HERE
-import bot_standard, bot_think, bot_onion, bot_dna # ALL BOTS MUST BE IMPORTED
+import cortex # Import the brain
+from deep_translator import GoogleTranslator
+from fuzzywuzzy import fuzz, process
 
-st.set_page_config(page_title="BDL.AI NEXUS", layout="wide")
+def run():
+    cortex.apply_theme("standard")
+    st.title("🤖 BDL Standard")
+    
+    with st.sidebar:
+        # We use lowercase codes for the gTTS engine
+        lang_map = {"None": "none", "Hebrew": "iw", "French": "fr", "Japanese": "ja", "Spanish": "es"}
+        choice = st.selectbox("Select Matrix Language", list(lang_map.keys()))
+        voice_on = st.toggle("Activate Voice Output", True)
 
-# Line 10 (Where your error is)
-# It only works if cortex.py has "def apply_theme" inside it!
-cortex.apply_theme("cyberpunk") 
+    if "messages" not in st.session_state: st.session_state.messages = []
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-if "active_page" not in st.session_state: 
-    st.session_state.active_page = "Home"
+    if prompt := st.chat_input("Communicate..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+        
+        response = ""
+        try:
+            df = cortex.conn.read(worksheet="Memory", ttl="1s")
+            qs = df['question'].fillna('').tolist()
+            match, score = process.extractOne(prompt, qs, scorer=fuzz.token_sort_ratio)
+            if score >= 85: 
+                response = df[df['question'] == match].iloc[-1]['answer']
+        except: pass
+        
+        if not response: response = "I haven't learned that lesson yet."
+        
+        # Translation Logic
+        trans = None
+        if choice != "None":
+            try:
+                trans = GoogleTranslator(source='auto', target=lang_map[choice]).translate(response)
+            except: trans = "[Translation Error]"
 
-
-with st.sidebar:
-    st.title("🔑 Access Panel")
-    if st.button("🌐 RETURN TO NEXUS HOME"): 
-        st.session_state.active_page = "Home"; st.rerun()
-    key = st.text_input("Credentials", type="password")
-    is_admin = (key in ["admin", "qwerty"])
-    is_dev = (key == "qwerty")
-
-if st.session_state.active_page == "Home":
-    st.markdown("<h1>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
-    score = cortex.get_total_intelligence()
-    st.markdown(f"<div class='intel-counter'><span>{score}</span><br><small>SYNTHESIZED LESSONS</small></div>", unsafe_allow_html=True)
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown("<div class='bot-card'><img src='https://img.icons8.com/neon/120/bot.png' width='100'/><h2>BDL</h2><p>Original & Great</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE BDL"): st.session_state.active_page = "BDL"; st.rerun()
-    with c2:
-        st.markdown("<div class='bot-card'><img src='https://img.icons8.com/neon/120/brain.png' width='100'/><h2>THINK</h2><p>Web Powerhouse</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE THINK"): st.session_state.active_page = "Think"; st.rerun()
-    with c3:
-        st.markdown("<div class='bot-card'><div class='dev-box'><div class='caution-tape'>DEV-ONLY</div><div style='font-size: 80px;'>🧅</div></div><h2>ONION</h2><p>Layer Synthesis</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE ONION"):
-            if is_dev: st.session_state.active_page = "Onion"; st.rerun()
-            else: st.warning("Requires Dev Key.")
-    with c4:
-        st.markdown("<div class='bot-card'><div style='font-size: 80px;'>🧬</div><h2>DNA</h2><p>Family Tree Search</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DNA"): st.session_state.active_page = "DNA"; st.rerun()
-
-    if is_admin:
-        st.markdown("<h2 style='color:#FF8C00; border-bottom:1px solid #FF8C00;'>🛠️ ADMIN COMMAND</h2>", unsafe_allow_html=True)
-        # Approval code for Requests and ContextRequests tabs here...
-
-elif st.session_state.active_page == "BDL": bot_standard.run()
-elif st.session_state.active_page == "Think": bot_think.run()
-elif st.session_state.active_page == "Onion": bot_onion.run()
-elif st.session_state.active_page == "DNA": bot_dna.run()
+        full = f"{response}\n\n---\n**Translation:** {trans}" if trans else response
+        
+        with st.chat_message("assistant"):
+            st.markdown(full)
+            # THE LINE 32 CALL:
+            if voice_on: 
+                cortex.show_voices(response, trans, lang_map[choice], choice)
+        
+        st.session_state.messages.append({"role": "assistant", "content": full})
