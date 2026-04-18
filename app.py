@@ -1,3 +1,4 @@
+import
 import streamlit as st
 import cortex, bot_standard, bot_think, bot_onion, bot_dna
 import pandas as pd
@@ -39,7 +40,7 @@ if page == "Home":
     with c4:
         st.markdown("<div class='bot-card'><h2>🧬</h2><h2>DNA</h2><p>Genealogy</p></div>", unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE DNA"): st.session_state.active_page = "DNA"; st.rerun()
-
+elif page == "Seed": seed.run()
 elif page == "BDL": bot_standard.run()
 elif page == "Think": bot_think.run()
 elif page == "Onion": bot_onion.run()
