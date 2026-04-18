@@ -9,3 +9,4 @@ streamlit-lottie
 wikipedia
 wikipedia-api
 requests
+google-generativeai
