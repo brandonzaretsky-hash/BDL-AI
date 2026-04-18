@@ -28,7 +28,7 @@ def apply_theme(style_type):
             </style>
             """, unsafe_allow_html=True)
     else:
-        st.markdown("<style>.online-indicator { color: #4CAF50; }</style>", unsafe_allow_html=True)
+        st.markdown("<style>.online-indicator { color: #4CAF50; font-weight: bold; }</style>", unsafe_allow_html=True)
 
 def get_total_intelligence():
     try:
@@ -40,9 +40,11 @@ def get_total_intelligence():
 def show_voices(e, t, code, choice):
     v1, v2 = st.columns(2)
     with v1:
-        try: tts_e = gTTS(e[:3000], lang='en'); f_e = io.BytesIO(); tts_e.write_to_fp(f_e); st.audio(f_e)
+        try:
+            tts_e = gTTS(e[:3000], lang='en'); f_e = io.BytesIO(); tts_e.write_to_fp(f_e); st.audio(f_e)
         except: pass
     if t and choice != "None":
         with v2:
-            try: tts_t = gTTS(t, lang=code); f_t = io.BytesIO(); tts_t.write_to_fp(f_t); st.audio(f_t)
+            try:
+                tts_t = gTTS(t, lang=code); f_t = io.BytesIO(); tts_t.write_to_fp(f_t); st.audio(f_t)
             except: pass
