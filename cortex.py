@@ -3,14 +3,14 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from fuzzywuzzy import fuzz, process
 from deep_translator import GoogleTranslator
-from gtts import gTTS
-import io, re, wikipedia, wikipediaapi, requests
+from gtts import gTTS # MUST HAVE THIS
+import io # MUST HAVE THIS
+import re, wikipedia, wikipediaapi, requests
 from datetime import datetime
 
-# 1. Setup the Connection
+# Shared Connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. THE THEME ENGINE (Make sure this is named exactly like this)
 def apply_theme(style_type):
     if style_type == "cyberpunk":
         st.markdown("""
@@ -23,18 +23,38 @@ def apply_theme(style_type):
             .stButton>button { background-color: #000; color: #00FFFF; border: 1px solid #00FFFF; box-shadow: 0 0 15px #00FFFF; width: 100%; height: 50px; }
             .stButton>button:hover { border: 1px solid #FF8C00; color: #FF8C00; box-shadow: 0 0 20px #FF8C00; }
             .intel-counter { font-size: 50px; text-align: center; border: 2px solid #00ff41; padding: 20px; border-radius: 15px; box-shadow: inset 0 0 30px rgba(0, 255, 65, 0.3), 0 0 20px rgba(0, 255, 65, 0.2); margin-bottom: 30px; background: rgba(0, 255, 65, 0.03); }
-            .bot-card { height: 280px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; margin-bottom: 10px; }
-            .dev-box { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-            .caution-tape { position: absolute; top: 40px; left: -25px; width: 200px; height: 30px; background-color: #FF8C00; color: #000; font-weight: 1000; transform: rotate(-25deg); text-align: center; line-height: 30px; box-shadow: 0 0 20px #FF8C00; font-family: 'Impact', sans-serif; font-size: 16px; z-index: 10; }
             </style>
             """, unsafe_allow_html=True)
     else:
-        st.markdown("<style>.online-indicator { color: #4CAF50; }</style>", unsafe_allow_html=True)
+        st.markdown("<style>.online-indicator { color: #4CAF50; font-weight: bold; }</style>", unsafe_allow_html=True)
 
-# 3. Intelligence Counter
 def get_total_intelligence():
     try:
         m = conn.read(worksheet="Memory", ttl="1s")
         c = conn.read(worksheet="Context", ttl="1s")
         return len(m) + len(c)
     except: return 0
+
+# --- THE CRASH FIX: ADDED EXTRA SAFETY ---
+def show_voices(e, t, code, choice):
+    try:
+        v1, v2 = st.columns(2)
+        with v1:
+            try:
+                tts_e = gTTS(e[:1000], lang='en')
+                f_e = io.BytesIO()
+                tts_e.write_to_fp(f_e)
+                st.audio(f_e)
+            except: st.caption("English Audio Grid Offline")
+            
+        # Only try translation voice if it's not "None" and code is valid
+        if t and choice != "None" and code != "none":
+            with v2:
+                try:
+                    tts_t = gTTS(t[:1000], lang=code)
+                    f_t = io.BytesIO()
+                    tts_t.write_to_fp(f_t)
+                    st.audio(f_t)
+                except: st.caption("Translation Audio Grid Offline")
+    except:
+        pass # If columns fail, just don't show audio
