@@ -1,69 +1,84 @@
 import streamlit as st
 import cortex
 import random, re
-import google.generativeai as genai
+from fuzzywuzzy import fuzz, process
 
 def run_onion_math(prompt, depth):
-    """SYSTEMS 1, 2, & 4: BACKGROUND ARCHITECTURE"""
+    """
+    INTERNAL CORE: SYSTEMS 1, 2, & 4
+    Executes the 10-digit Zip and 12-digit Sequence math in the background.
+    """
     words = re.findall(r'\b\w+\b', prompt)
+    # System 1: Zip Mapping (10-digit)
     _zips = {w: "".join([str(random.randint(0, 9)) for _ in range(10)]) for w in words}
-    loops = max(1, depth // 5)
+    
+    # System 4: Complexity scaling
+    loops = max(1, depth // 4)
     for _ in range(loops):
+        # System 2: 12-digit sequencing
         _logic = [f"{str(i).zfill(2)}{''.join([str(random.randint(0, 9)) for _ in range(10)])}" for i in range(len(words))]
-    return min(1.0, 0.4 + (depth * 0.05))
+    return True
+
+def synthesize_response(prompt, context_df):
+    """
+    SYSTEM 3: THE SYNTHESIS WIRE
+    This mimics an AI by building an answer from your data blocks.
+    """
+    # 1. Intent Scan
+    topics = context_df['Topic'].fillna('').tolist()
+    match, score = process.extractOne(prompt, topics, scorer=fuzz.token_set_ratio)
+    
+    # 2. Construction Matrix
+    if score >= 75:
+        data_block = context_df[context_df['Topic'] == match].iloc[-1]['Meaning']
+        
+        # We "Synthesize" the answer to make it direct
+        if "top" in prompt.lower() or "best" in prompt.lower():
+            prefixes = ["According to current data nodes, ", "Synthesis reveals that ", "The primary entry is "]
+            return f"{random.choice(prefixes)}{data_block} is the leading choice in this sector."
+        else:
+            return data_block
+    else:
+        # Fallback if the bot doesn't know the specific topic yet
+        return "System 3: Inquiry analyzed. Current Context Sheet does not contain a stable data-block for this query. Please update the Admin Panel."
 
 def run():
     cortex.apply_theme("cyberpunk")
-    st.title("🧅 BDL Onion: Universal Node")
-
-    # SYSTEM 3: CONFIGURATION
-    try:
-        # PULLING FROM SECRETS (REQUIRED FOR SAFETY)
-        API_KEY = st.secrets["GEMINI_API_KEY"]
-        genai.configure(api_key=API_KEY)
-    except Exception as e:
-        st.error("🚨 KEY ERROR: No 'GEMINI_API_KEY' found in Streamlit Secrets.")
-        st.info("1. Go to Google AI Studio and get a NEW key.\n2. In Streamlit Cloud, go to Settings -> Secrets.\n3. Add: GEMINI_API_KEY = 'your_key'")
-        return
+    st.title("🧅 BDL Onion: Synthetic Core")
+    st.caption("OFFLINE GENERATIVE ENGINE | SYSTEMS 1-4 ACTIVE")
 
     if "onion_msgs" not in st.session_state: 
         st.session_state.onion_msgs = []
 
+    # Display Chat History
     for msg in st.session_state.onion_msgs:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): 
+            st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Testing Universal Connection..."):
+    if prompt := st.chat_input("Communicate with the Onion..."):
+        # 1. Record User Intent
         st.session_state.onion_msgs.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"): 
+            st.markdown(prompt)
 
-        temp = run_onion_math(prompt, len(st.session_state.onion_msgs))
+        # 2. Run Background Systems
+        run_onion_math(prompt, len(st.session_state.onion_msgs))
 
-        with st.status("🧅 Scanning for available neural nodes...", expanded=True) as status:
-            final_answer = ""
-            # The list of models we will hunt for
-            model_nodes = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro']
-            
-            connected = False
-            for node in model_nodes:
-                if connected: break
-                try:
-                    status.update(label=f"Attempting Bridge: {node}...")
-                    model = genai.GenerativeModel(node)
-                    
-                    persona = "You are the BDL Onion. Answer directly and grammatically. No intro/outro."
-                    response = model.generate_content(f"{persona}\n\nQuery: {prompt}")
-                    
-                    final_answer = response.text
-                    connected = True
-                    status.update(label=f"Connection Secured: {node}", state="complete")
-                except Exception as e:
-                    status.update(label=f"Node {node} rejected connection.")
-                    continue
+        # 3. System 3 & 4: Synthesis
+        with st.status("🧅 Peeling layers and synthesizing from Context Sheet...", expanded=False) as status:
+            try:
+                # Get your actual data from GSheets
+                context_df = cortex.conn.read(worksheet="Context", ttl="1s")
+                
+                # Use the local "AI" engine to build the answer
+                final_answer = synthesize_response(prompt, context_df)
+                
+                status.update(label="Synthesis Complete", state="complete")
+            except:
+                final_answer = "🚨 CRITICAL ERROR: Could not read Context Sheet. Verify your GSheet connection."
+                status.update(label="Synthesis Failed", state="error")
 
-            if not connected:
-                final_answer = "🚨 **SYSTEM 3 TOTAL BLACKOUT:** All neural nodes rejected the API key. The key may be revoked or inactive."
-                status.update(label="All Bridges Failed", state="error")
-
+        # 4. Final Output
         with st.chat_message("assistant"): 
             st.markdown(final_answer)
             
