@@ -1,15 +1,16 @@
 import streamlit as st
-import cortex  # <--- THIS LINE MUST BE HERE
-import bot_standard, bot_think, bot_onion, bot_dna # All your other files
-from streamlit_lottie import st_lottie
-import requests, pandas as pd
+import cortex  # THIS MUST BE HERE
+import bot_standard, bot_think, bot_onion, bot_dna # ALL BOTS MUST BE IMPORTED
 
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide")
 
-# This is line 7 - it only works if 'import cortex' happened above!
-cortex.apply_theme("cyberpunk")
+# Line 10 (Where your error is)
+# It only works if cortex.py has "def apply_theme" inside it!
+cortex.apply_theme("cyberpunk") 
 
-if "active_page" not in st.session_state: st.session_state.active_page = "Home"
+if "active_page" not in st.session_state: 
+    st.session_state.active_page = "Home"
+
 
 with st.sidebar:
     st.title("🔑 Access Panel")
