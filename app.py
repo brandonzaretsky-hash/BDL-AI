@@ -20,11 +20,9 @@ with st.sidebar:
     
     key = st.text_input("Credentials", type="password")
     is_dev = (key == "qwerty")
-    is_admin = (key in ["admin", "qwerty"])
 
-    # THE INFUSION BUTTON
+    # This is where the seed function is triggered
     if is_dev:
-        st.markdown("---")
         try:
             seed.run_infusion_ui()
         except AttributeError:
