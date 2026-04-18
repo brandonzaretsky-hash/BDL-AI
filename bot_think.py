@@ -1,17 +1,23 @@
 import streamlit as st
-import cortex, wikipedia, wikipediaapi
+import cortex # Import the brain
 
 def run():
     cortex.apply_theme("cyberpunk")
     st.title("🧠 BDL Think")
-    sport = st.sidebar.toggle("Sport Mode")
-    strict = st.sidebar.slider("Strictness", 50, 100, 85)
     
-    prompt = st.chat_input("Web scan topic...")
+    with st.sidebar:
+        st.markdown("### 🏒 Performance Panel")
+        sport = st.toggle("🏃 Sport Mode", value=False)
+        st.caption("Sport mode provides high-speed summaries.")
+
+    prompt = st.chat_input("Enter Topic for Global Web Scan...")
     if prompt:
-        with st.status("Accessing Grid..."):
-            wiki = wikipediaapi.Wikipedia(user_agent='BDL-AI/1.0', language='en')
-            search = wikipedia.search(prompt)
-            res = wiki.page(search[0]).text[:5000] if search else "No records found."
-            if sport and search: res = wiki.page(search[0]).summary
-        st.markdown(f"### 🔍 RESULTS\n\n{res}")
+        with st.chat_message("user"): 
+            st.markdown(prompt)
+            
+        with st.status("📡 Rerouting through Global Grid...", expanded=True):
+            # USE THE CORTEX ENGINE WE JUST UPDATED
+            res = cortex.run_deepthink_engine(prompt, sport=sport)
+        
+        with st.chat_message("assistant"):
+            st.markdown(res)
