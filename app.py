@@ -1,25 +1,33 @@
-import seed
 import streamlit as st
 import cortex, bot_standard, bot_think, bot_onion, bot_dna
+import seed 
 import pandas as pd
 
-# Page config must be the absolute first thing
+# 1. System Config
 st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🧠")
 cortex.apply_theme("cyberpunk")
 
-# Initialize Session State
+# 2. State Initialization
 if "active_page" not in st.session_state:
     st.session_state.active_page = "Home"
 
+# 3. Sidebar & Access Control
 with st.sidebar:
     st.title("🔑 Access Panel")
     if st.button("🌐 RETURN TO NEXUS HOME"): 
         st.session_state.active_page = "Home"
         st.rerun()
+    
     key = st.text_input("Credentials", type="password")
-    is_admin = (key in ["admin", "qwerty"])
     is_dev = (key == "qwerty")
+    is_admin = (key in ["admin", "qwerty"])
 
+    # THE BUTTON LIVES HERE NOW (SIDEBAR)
+    if is_dev:
+        st.markdown("---")
+        seed.run_infusion_ui()
+
+# 4. Router
 page = st.session_state.active_page
 
 if page == "Home":
@@ -29,19 +37,27 @@ if page == "Home":
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown("<div class='bot-card'><h2>🤖</h2><h2>BDL</h2><p>Standard</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE BDL"): st.session_state.active_page = "BDL"; st.rerun()
+        st.markdown("<div class='bot-card'><h2>🤖</h2><h3>BDL</h3></div>", unsafe_allow_html=True)
+        if st.button("🔌 INITIALIZE BDL"): 
+            st.session_state.active_page = "BDL"
+            st.rerun()
     with c2:
-        st.markdown("<div class='bot-card'><h2>🧠</h2><h2>THINK</h2><p>Web Scan</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE THINK"): st.session_state.active_page = "Think"; st.rerun()
+        st.markdown("<div class='bot-card'><h2>🧠</h2><h3>THINK</h3></div>", unsafe_allow_html=True)
+        if st.button("🔌 INITIALIZE THINK"): 
+            st.session_state.active_page = "Think"
+            st.rerun()
     with c3:
-        st.markdown("<div class='bot-card'><h2>🧅</h2><h2>ONION</h2><p>Synthetic Core</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='bot-card'><h2>🧅</h2><h3>ONION</h3></div>", unsafe_allow_html=True)
         if st.button("🔌 INITIALIZE ONION"):
-            if is_dev: st.session_state.active_page = "Onion"; st.rerun()
+            if is_dev: 
+                st.session_state.active_page = "Onion"
+                st.rerun()
             else: st.warning("Dev Key Required.")
     with c4:
-        st.markdown("<div class='bot-card'><h2>🧬</h2><h2>DNA</h2><p>Genealogy</p></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DNA"): st.session_state.active_page = "DNA"; st.rerun()
+        st.markdown("<div class='bot-card'><h2>🧬</h2><h3>DNA</h3></div>", unsafe_allow_html=True)
+        if st.button("🔌 INITIALIZE DNA"): 
+            st.session_state.active_page = "DNA"
+            st.rerun()
 
 elif page == "BDL": bot_standard.run()
 elif page == "Think": bot_think.run()
