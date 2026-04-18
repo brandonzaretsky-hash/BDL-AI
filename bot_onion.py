@@ -3,13 +3,11 @@ import cortex
 import random, re
 import google.generativeai as genai
 
-# YOUR API KEY LOADED
+# YOUR API KEY
 API_KEY = "AIzaSyAV9aWeySnQg4P253EOk2Cu0VVFLEL5F-M"
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
 
 def run_onion_math(prompt, depth):
-    # System 1 & 2: 10/12-digit sequencing (Background)
+    # System 1 & 2: Background Math
     words = re.findall(r'\b\w+\b', prompt)
     _zips = {w: "".join([str(random.randint(0, 9)) for _ in range(10)]) for w in words}
     loops = max(1, depth // 5)
@@ -19,27 +17,40 @@ def run_onion_math(prompt, depth):
 
 def run():
     cortex.apply_theme("cyberpunk")
-    st.title("🧅 BDL Onion: Synthesis")
+    st.title("🧅 BDL Onion: Diagnostic Mode")
+
+    # Initialize API
+    try:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"Failed to configure Gemini: {str(e)}")
+        return
 
     if "onion_msgs" not in st.session_state: st.session_state.onion_msgs = []
 
     for msg in st.session_state.onion_msgs:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ask the Onion..."):
+    if prompt := st.chat_input("Testing Onion Connection..."):
         st.session_state.onion_msgs.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
-        # Run background logic
         temp = run_onion_math(prompt, len(st.session_state.onion_msgs))
 
-        with st.status("🧅 Peeling Layers...", expanded=False):
+        with st.status("🧅 Investigating Grid Connection...", expanded=True) as status:
             try:
-                persona = "You are the BDL Onion. Provide direct, grammatically perfect answers. No definitions. No fluff. Get straight to the point."
-                response = model.generate_content(f"{persona}\n\nQuery: {prompt}", generation_config={"temperature": temp})
+                persona = "You are the BDL Onion AI. Give direct answers."
+                response = model.generate_content(
+                    f"{persona}\n\nQuery: {prompt}", 
+                    generation_config={"temperature": temp}
+                )
                 answer = response.text
-            except:
-                answer = "System 3 Synthesis failed. Check Grid Connection."
+                status.update(label="Connection Stable", state="complete")
+            except Exception as e:
+                # THIS IS THE IMPORTANT PART: It will show us the REAL error
+                answer = f"🚨 **SYSTEM 3 CRITICAL ERROR:** {str(e)}"
+                status.update(label="Connection Failed", state="error")
 
         with st.chat_message("assistant"): st.markdown(answer)
         st.session_state.onion_msgs.append({"role": "assistant", "content": answer})
