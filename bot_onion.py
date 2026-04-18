@@ -3,74 +3,66 @@ import cortex
 import random, re
 import google.generativeai as genai
 
-# YOUR ACTIVE API KEY
-API_KEY = "AIzaSyAV9aWeySnQg4P253EOk2Cu0VVFLEL5F-M"
-
 def run_onion_math(prompt, depth):
     """SYSTEMS 1, 2, & 4: BACKGROUND ARCHITECTURE"""
     words = re.findall(r'\b\w+\b', prompt)
-    # System 1: Zip Mapping
     _zips = {w: "".join([str(random.randint(0, 9)) for _ in range(10)]) for w in words}
-    # System 4: Complexity scaling based on chat depth
     loops = max(1, depth // 5)
     for _ in range(loops):
-        # System 2: 12-digit sequencing
         _logic = [f"{str(i).zfill(2)}{''.join([str(random.randint(0, 9)) for _ in range(10)])}" for i in range(len(words))]
     return min(1.0, 0.4 + (depth * 0.05))
 
 def run():
     cortex.apply_theme("cyberpunk")
-    st.title("🧅 BDL Onion: Stable Neural Bridge")
+    st.title("🧅 BDL Onion: Universal Node")
 
-    # SYSTEM 3: CONFIGURATION & MODEL SELECTION
+    # SYSTEM 3: CONFIGURATION
+    try:
+        # PULLING FROM SECRETS (REQUIRED FOR SAFETY)
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
+    except Exception as e:
+        st.error("🚨 KEY ERROR: No 'GEMINI_API_KEY' found in Streamlit Secrets.")
+        st.info("1. Go to Google AI Studio and get a NEW key.\n2. In Streamlit Cloud, go to Settings -> Secrets.\n3. Add: GEMINI_API_KEY = 'your_key'")
+        return
+
     if "onion_msgs" not in st.session_state: 
         st.session_state.onion_msgs = []
 
-    # Display Chat History
     for msg in st.session_state.onion_msgs:
-        with st.chat_message(msg["role"]): 
-            st.markdown(msg["content"])
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Communicate with the Onion..."):
+    if prompt := st.chat_input("Testing Universal Connection..."):
         st.session_state.onion_msgs.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): 
-            st.markdown(prompt)
+        with st.chat_message("user"): st.markdown(prompt)
 
-        # Run background logic
         temp = run_onion_math(prompt, len(st.session_state.onion_msgs))
 
-        with st.status("🧅 Peeling layers and establishing stable neural bridge...", expanded=False) as status:
+        with st.status("🧅 Scanning for available neural nodes...", expanded=True) as status:
             final_answer = ""
-            # Establish the persona for System 4
-            persona = (
-                "You are the BDL Onion AI. Answer directly using proper grammar. "
-                "Do not provide definitions, introductions, or 'Here is the answer'. "
-                "Get straight to the data synthesis based on the user's intent."
-            )
+            # The list of models we will hunt for
+            model_nodes = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro']
             
-            try:
-                # Configuration
-                genai.configure(api_key=API_KEY)
-                
-                # ATTEMPT 1: Modern Stable Flash
+            connected = False
+            for node in model_nodes:
+                if connected: break
                 try:
-                    status.update(label="Scanning Neural Node: 1.5-Flash...")
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    status.update(label=f"Attempting Bridge: {node}...")
+                    model = genai.GenerativeModel(node)
+                    
+                    persona = "You are the BDL Onion. Answer directly and grammatically. No intro/outro."
                     response = model.generate_content(f"{persona}\n\nQuery: {prompt}")
+                    
                     final_answer = response.text
-                except:
-                    # ATTEMPT 2: Legacy Stable naming
-                    status.update(label="Node 1.5-Flash Offline. Rerouting to 1.0-Pro...")
-                    model = genai.GenerativeModel('gemini-1.0-pro')
-                    response = model.generate_content(f"{persona}\n\nQuery: {prompt}")
-                    final_answer = response.text
-                
-                status.update(label="Synthesis Complete", state="complete")
-                
-            except Exception as e:
-                # System 3 Final Fallback
-                final_answer = f"🚨 **SYSTEM 3 CRITICAL ERROR:** All nodes failed. Trace: {str(e)}"
-                status.update(label="Bridge Failed", state="error")
+                    connected = True
+                    status.update(label=f"Connection Secured: {node}", state="complete")
+                except Exception as e:
+                    status.update(label=f"Node {node} rejected connection.")
+                    continue
+
+            if not connected:
+                final_answer = "🚨 **SYSTEM 3 TOTAL BLACKOUT:** All neural nodes rejected the API key. The key may be revoked or inactive."
+                status.update(label="All Bridges Failed", state="error")
 
         with st.chat_message("assistant"): 
             st.markdown(final_answer)
