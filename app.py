@@ -1,58 +1,64 @@
 import streamlit as st
 import cortex, bot_standard, bot_think, bot_onion, bot_dna
-import seed 
 import pandas as pd
 
-# 1. System Config
-st.set_page_config(page_title="BDL.AI NEXUS", layout="wide", page_icon="🧠")
+st.set_page_config(page_title="BDL.AI NEXUS", layout="wide")
 cortex.apply_theme("cyberpunk")
 
-# 2. State Initialization
 if "active_page" not in st.session_state:
     st.session_state.active_page = "Home"
 
-# 3. Sidebar & Access Control
 with st.sidebar:
     st.title("🔑 Access Panel")
-    if st.button("🌐 RETURN TO NEXUS HOME"): 
-        st.session_state.active_page = "Home"
-        st.rerun()
+    if st.button("🌐 NEXUS HOME"): 
+        st.session_state.active_page = "Home"; st.rerun()
     
     key = st.text_input("Credentials", type="password")
     is_dev = (key == "qwerty")
+    is_admin = (key in ["admin", "qwerty"])
 
-    # This is where the seed function is triggered
-    if is_dev:
+    # --- ADMIN MODERATION DECK ---
+    if is_admin:
+        st.markdown("---")
+        st.subheader("🛡️ Moderation Deck")
         try:
-            seed.run_infusion_ui()
-        except AttributeError:
-            st.warning("Seed module detected, but UI function is missing. Update seed.py.")
+            df = cortex.conn.read(worksheet="Context", ttl="1s")
+            pending = df[df['Status'] == 'Pending']
+            
+            if not pending.empty:
+                st.write(f"📥 {len(pending)} nodes waiting.")
+                item = pending.iloc[0] # Review one at a time
+                st.info(f"**Topic:** {item['Topic']}\n\n**Data:** {item['Meaning']}")
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✅ Approve"):
+                    df.loc[df['Topic'] == item['Topic'], 'Status'] = 'Approved'
+                    cortex.conn.update(worksheet="Context", data=df)
+                    st.success("Approved!")
+                    st.rerun()
+                if c2.button("❌ Decline"):
+                    df = df[df['Topic'] != item['Topic']]
+                    cortex.conn.update(worksheet="Context", data=df)
+                    st.error("Deleted.")
+                    st.rerun()
+            else:
+                st.write("✅ Cortex is clean.")
+        except:
+            st.write("GSheet Link Offline.")
 
-# 4. Router
 page = st.session_state.active_page
-
 if page == "Home":
-    st.markdown("<h1>BDL.AI NEXUS GATEWAY</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>BDL.AI NEXUS</h1>", unsafe_allow_html=True)
     score = cortex.get_total_intelligence()
-    st.markdown(f"<div class='intel-counter'><span>{score}</span><br><small>DATA NODES IN CORTEX</small></div>", unsafe_allow_html=True)
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown("<div class='bot-card'><h2>🤖</h2><h3>BDL</h3></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE BDL"): st.session_state.active_page = "BDL"; st.rerun()
-    with c2:
-        st.markdown("<div class='bot-card'><h2>🧠</h2><h3>THINK</h3></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE THINK"): st.session_state.active_page = "Think"; st.rerun()
-    with c3:
-        st.markdown("<div class='bot-card'><h2>🧅</h2><h3>ONION</h3></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE ONION"):
-            if is_dev: st.session_state.active_page = "Onion"; st.rerun()
-            else: st.warning("Dev Key Required.")
-    with c4:
-        st.markdown("<div class='bot-card'><h2>🧬</h2><h3>DNA</h3></div>", unsafe_allow_html=True)
-        if st.button("🔌 INITIALIZE DNA"): st.session_state.active_page = "DNA"; st.rerun()
+    st.markdown(f"<div style='text-align:center;font-size:30px;border:1px solid #00ff41;'>{score} NODES</div>", unsafe_allow_html=True)
+    
+    # Simple Navigation
+    if st.button("🤖 INITIALIZE BDL"): st.session_state.active_page = "BDL"; st.rerun()
+    if st.button("🧠 INITIALIZE THINK"): st.session_state.active_page = "Think"; st.rerun()
+    if st.button("🧅 INITIALIZE ONION"):
+        if is_dev: st.session_state.active_page = "Onion"; st.rerun()
+        else: st.warning("Dev Access Required.")
 
 elif page == "BDL": bot_standard.run()
 elif page == "Think": bot_think.run()
 elif page == "Onion": bot_onion.run()
-elif page == "DNA": bot_dna.run()
