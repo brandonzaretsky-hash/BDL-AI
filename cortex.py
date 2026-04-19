@@ -19,7 +19,7 @@ def apply_theme(style_type):
             /* High-Tech Font & Glow */
             h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; }
             h2, h3 { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; }
-            p, span, div, li, label { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #00ff41; }
+            p, span, div, li, label { color: #66f7ff !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #66f7ff; }
             
             /* Sidebar Styling */
             section[data-testid="stSidebar"] { background-color: #051a05; border-right: 2px solid #FF8C00; }
@@ -51,13 +51,13 @@ def apply_theme(style_type):
                 background: rgba(0,0,0,0.5);
                 margin-bottom: 15px;
             }
-            .bot-card:hover { border: 1px solid #00ff41; box-shadow: 0 0 15px #00ff41; }
+            .bot-card:hover { border: 1px solid #66f7ff; box-shadow: 0 0 15px #66f7ff; }
 
             /* Large Score Counter */
             .intel-counter { 
                 font-size: 50px; 
                 text-align: center; 
-                border: 2px solid #00ff41; 
+                border: 2px solid #66f7ff; 
                 padding: 15px; 
                 border-radius: 15px; 
                 box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); 
