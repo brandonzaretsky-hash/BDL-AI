@@ -12,7 +12,7 @@ def apply_theme(style_type):
             <style>
             /* The Main App Background */
             .stApp { 
-                background-color: 250, 100, 118; 
+                background-color: 1000, 100, 118; 
                 background-image: radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.1) 0%, rgba(255, 0, 255, 0.1) 70%); 
             }
             
