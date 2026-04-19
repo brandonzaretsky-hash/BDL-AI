@@ -13,7 +13,7 @@ def apply_theme(style_type):
             /* The Main App Background */
             .stApp { 
                 background-color: #000; 
-                background-image: radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.1) 0%, rgba(0, 0, 0, 1) 70%); 
+                background-image: radial-gradient(circle at 50% 50%, rgba(255, 0, 255, 0.1) 0%, rgba(255, 0, 255, 0.1) 70%); 
             }
             
             /* High-Tech Font & Glow */
