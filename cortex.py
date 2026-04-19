@@ -1,3 +1,11 @@
+
+import streamlit as st
+import pandas as pd
+from streamlit_gsheets import GSheetsConnection
+
+# Database Connection
+conn = st.connection("gsheets", type=GSheetsConnection)
+
 def apply_theme(style_type):
     if style_type == "cyberpunk":
         st.markdown("""
@@ -11,7 +19,7 @@ def apply_theme(style_type):
             /* High-Tech Font & Glow */
             h1 { color: #FF00FF !important; text-shadow: 0 0 15px #FF00FF; text-align: center; font-weight: bold; }
             h2, h3 { color: #00FFFF !important; text-shadow: 0 0 10px #00FFFF; }
-            p, span, div, li, label { color: #66f7ff !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #66f7ff; }
+            p, span, div, li, label { color: #00ff41 !important; font-family: 'Courier New', monospace; text-shadow: 0 0 5px #00ff41; }
             
             /* Sidebar Styling */
             section[data-testid="stSidebar"] { background-color: #051a05; border-right: 2px solid #FF8C00; }
@@ -30,7 +38,7 @@ def apply_theme(style_type):
                 box-shadow: 0 0 20px #FF8C00; 
             }
 
-            /* UI Cards */
+            /* The Missing UI Cards */
             .bot-card { 
                 height: 220px; 
                 display: flex; 
@@ -43,17 +51,32 @@ def apply_theme(style_type):
                 background: rgba(0,0,0,0.5);
                 margin-bottom: 15px;
             }
-            .bot-card:hover { border: 1px solid #66f7ff; box-shadow: 0 0 15px #66f7ff; }
+            .bot-card:hover { border: 1px solid #00ff41; box-shadow: 0 0 15px #00ff41; }
 
             /* Large Score Counter */
             .intel-counter { 
                 font-size: 50px; 
                 text-align: center; 
-                border: 2px solid #66f7ff; 
+                border: 2px solid #00ff41; 
                 padding: 15px; 
                 border-radius: 15px; 
-                box-shadow: 0 0 20px rgba(102, 247, 255, 0.2); 
+                box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); 
                 margin-bottom: 30px; 
             }
             </style>
             """, unsafe_allow_html=True)
+
+def update_onion_context(topic, meaning, status="Pending"):
+    try:
+        df = conn.read(worksheet="Context", ttl="1s")
+        new_row = pd.DataFrame([{"Topic": topic, "Meaning": meaning, "Status": status}])
+        updated_df = pd.concat([df, new_row], ignore_index=True).drop_duplicates(subset=['Topic'], keep='last')
+        conn.update(worksheet="Context", data=updated_df)
+        return True
+    except: return False
+
+def get_total_intelligence():
+    try:
+        c = conn.read(worksheet="Context", ttl="1s")
+        return len(c[c['Status'] == 'Approved'])
+    except: return 0
