@@ -241,7 +241,7 @@ if st.session_state.current_mode == "Hub":
     st.caption("Central Gateway | Select a Module System")
 
     is_admin_user = st.session_state.role in ["Admin", "SuperAdmin"]
-    btn_label = "Enter" if is_admin_user else "..."
+    btn_label = "Enter" if is_admin_user else 
 
     # Row 1: 4 Cards
     col1, col2, col3, col4 = st.columns(4)
