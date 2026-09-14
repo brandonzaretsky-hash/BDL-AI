@@ -70,27 +70,33 @@ if "role" not in st.session_state:
 if "current_mode" not in st.session_state:
     st.session_state.current_mode = "Hub"
 
-# --- 4. CYBERPUNK & CAUTION TAPE CSS ---
+# --- 4. MIDNIGHT DARK (EYE-FRIENDLY) CSS ---
 def apply_styles():
     st.markdown("""
         <style>
+        /* Base Background & Body Text */
         .stApp {
-            background-color: #05050a;
-            color: #00ff41;
-            font-family: 'Courier New', monospace;
+            background-color: #0f141d;
+            color: #d0d7e5;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
         
+        /* Softer Headings */
         h1, h2, h3 {
-            color: #00ffff !important;
-            text-shadow: 0 0 10px #00ffff;
+            color: #e2e8f0 !important;
             text-align: center;
+            font-weight: 600;
+        }
+
+        h1 {
+            color: #818cf8 !important;
         }
         
         /* Card Container Base */
         .card-container {
             position: relative;
-            background: #0d0d1a;
-            border: 2px solid #00ff41;
+            background: #182030;
+            border: 1px solid #2d3748;
             border-radius: 12px;
             padding: 25px;
             text-align: center;
@@ -99,23 +105,22 @@ def apply_styles():
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             overflow: hidden;
             margin-bottom: 20px;
         }
 
-        /* Caution Tape Overlay */
+        /* Subdued Caution Tape Overlay */
         .caution-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background: repeating-linear-gradient(
                 45deg,
-                #ffcc00,
-                #ffcc00 15px,
-                #000000 15px,
-                #000000 30px
+                rgba(217, 119, 6, 0.25),
+                rgba(217, 119, 6, 0.25) 15px,
+                rgba(15, 20, 29, 0.6) 15px,
+                rgba(15, 20, 29, 0.6) 30px
             );
-            opacity: 0.35;
             z-index: 1;
         }
 
@@ -123,34 +128,44 @@ def apply_styles():
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) rotate(-8deg);
-            background: #ffcc00;
-            color: #000000;
-            font-weight: bold;
-            font-size: 1.2rem;
-            padding: 8px 30px;
-            border: 2px solid #000000;
-            box-shadow: 0 0 10px #000;
+            transform: translate(-50%, -50%) rotate(-6deg);
+            background: #b45309;
+            color: #fef3c7;
+            font-weight: 600;
+            font-size: 1.05rem;
+            padding: 6px 24px;
+            border: 1px solid #78350f;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
             z-index: 2;
             white-space: nowrap;
         }
 
         .card-content {
             z-index: 0;
-            filter: blur(3px);
+            filter: blur(2.5px);
+            opacity: 0.6;
         }
 
+        /* Buttons Styling */
         .stButton>button {
-            background-color: #000;
-            color: #00ffff;
-            border: 1px solid #00ffff;
+            background-color: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-radius: 8px;
             width: 100%;
-            transition: 0.3s;
+            transition: all 0.2s ease-in-out;
         }
         .stButton>button:hover {
-            border: 1px solid #ff00ff;
-            color: #ff00ff;
-            box-shadow: 0 0 15px #ff00ff;
+            border-color: #6366f1;
+            color: #e0e7ff;
+            background-color: #312e81;
+        }
+
+        /* Sidebar Customization */
+        section[data-testid="stSidebar"] {
+            background-color: #111827;
+            border-right: 1px solid #1f2937;
         }
         </style>
     """, unsafe_allow_html=True)
