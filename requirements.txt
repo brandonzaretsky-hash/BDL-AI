@@ -1,12 +1,1 @@
 streamlit
-pandas
-st-gsheets-connection
-fuzzywuzzy
-python-Levenshtein
-deep-translator
-gTTS
-streamlit-lottie
-wikipedia
-wikipedia-api
-requests
-google-generativeai>=0.8.0
