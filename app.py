@@ -240,6 +240,9 @@ if st.session_state.current_mode == "Hub":
     st.title("BDL HUB")
     st.caption("Central Gateway | Select a Module System")
 
+    is_admin_user = st.session_state.role in ["Admin", "SuperAdmin"]
+    btn_label = "Enter" if is_admin_user else "..."
+
     # Row 1: 4 Cards
     col1, col2, col3, col4 = st.columns(4)
     
@@ -255,7 +258,7 @@ if st.session_state.current_mode == "Hub":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Enter Picture-Rama", key="btn_pr"):
+        if st.button(f"{btn_label} Picture-Rama", key="btn_pr"):
             attempt_entry("Picture-Rama", is_locked=True)
 
     # 2. The Brain
@@ -270,7 +273,7 @@ if st.session_state.current_mode == "Hub":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Enter The Brain", key="btn_tb"):
+        if st.button(f"{btn_label} The Brain", key="btn_tb"):
             attempt_entry("The Brain", is_locked=True)
 
     # 3. Crowd Brain
@@ -285,7 +288,7 @@ if st.session_state.current_mode == "Hub":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Enter Crowd Brain", key="btn_cb"):
+        if st.button(f"{btn_label} Crowd Brain", key="btn_cb"):
             attempt_entry("Crowd Brain", is_locked=True)
 
     # 4. The Code
@@ -300,7 +303,7 @@ if st.session_state.current_mode == "Hub":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Enter The Code", key="btn_tc"):
+        if st.button(f"{btn_label} The Code", key="btn_tc"):
             attempt_entry("The Code", is_locked=True)
 
     st.markdown("---")
@@ -318,7 +321,7 @@ if st.session_state.current_mode == "Hub":
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Enter Wiki-Brain", key="btn_wb"):
+        if st.button(f"{btn_label} Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
 # --- MODULE PLACEHOLDER VIEWS (ADMIN UNLOCKED MODE) ---
