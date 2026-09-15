@@ -184,7 +184,7 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. TYPO-TOLERANT & CONVERSATIONAL MEMORY ENGINE ---
+# --- 5. CONVERSATIONAL REASONING & INFERENCE ENGINE ---
 def generate_local_response(prompt, history):
     p = prompt.lower().strip()
     wiki = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
@@ -231,22 +231,43 @@ def generate_local_response(prompt, history):
                 return f"Repeating the summary for **{topic.title()}**:\n\n{short_paragraph}"
 
     # Extract clean topic string
-    query = re.sub(r'^(what is|what are|who is|tell me about|explain|how does)\s+', '', p).strip()
+    query = re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do)\s+', '', p).strip()
 
-    # Attempt Wikipedia Lookup
+    # Attempt Direct Wikipedia Lookup
     page = wiki.page(query)
+
+    # EDUCATED GUESSING LOGIC: Infer context from conversation history if direct lookup fails
     if not page.exists():
-        # Handle Typo Recognition via Search Suggestions
-        search_results = wiki.page(query)
-        # Attempt simple spell fix fallback
+        # Scan history for previous user topics
+        past_user_queries = [
+            re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do)\s+', '', m["content"].lower()).strip()
+            for m in history if m["role"] == "user"
+        ]
+        
+        # Check if the user is asking a vague question about the last topic (e.g., "how do you play it", "where is it from")
+        if st.session_state.last_searched_topic and len(p.split()) < 7:
+            query = f"{st.session_state.last_searched_topic} {query}"
+            page = wiki.page(query)
+
+        # Try fuzzy match against past discussed topics
+        if not page.exists() and past_user_queries:
+            matches = difflib.get_close_matches(query, past_user_queries, n=1, cutoff=0.4)
+            if matches:
+                guessed_topic = matches[0]
+                page = wiki.page(guessed_topic)
+                if page.exists():
+                    query = guessed_topic
+
+    # Final Typo Matching Attempt
+    if not page.exists():
         words = query.split()
         if len(words) == 1 and len(words[0]) > 3:
-            # Fuzzy match attempt against common dictionary terms
-            matches = difflib.get_close_matches(query, ["soccer", "football", "python", "computer", "algorithm", "science", "history", "technology"], n=1, cutoff=0.6)
+            matches = difflib.get_close_matches(query, ["soccer", "football", "python", "computer", "algorithm", "science", "history", "technology", "baseball", "basketball"], n=1, cutoff=0.5)
             if matches:
                 page = wiki.page(matches[0])
                 query = matches[0]
 
+    # Render Answer if topic was found or inferred
     if page.exists():
         st.session_state.last_searched_topic = query
         summary_sentences = page.summary.split('. ')
@@ -258,13 +279,12 @@ def generate_local_response(prompt, history):
             short_paragraph += '.'
         
         return f"{random.choice(openers)}{short_paragraph}"
-    else:
-        fallback_options = [
-            f"I couldn't find a direct match for '{query}'. Could you check the spelling or rephrase the question?",
-            f"No exact entry found for '{query}'. Try typing the main keyword directly!",
-            f"I looked up '{query}' but didn't catch a full record. Ask me again with a slightly broader term!"
-        ]
-        return random.choice(fallback_options)
+
+    # Intelligent Guess Fallback based on conversation context
+    if st.session_state.last_searched_topic:
+        return f"Based on what we were discussing about **{st.session_state.last_searched_topic.title()}**, I'd guess you're asking for more context on that topic. Could you specify which part you want to explore next?"
+    
+    return "I couldn't find a direct record for that. Try giving me a specific keyword or rephrasing your question!"
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -426,7 +446,7 @@ if st.session_state.current_mode == "Hub":
 # --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH MEMORY) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Contextual Memory & Typo Handling")
+    st.caption("Interactive Assistant with Contextual Inference & Memory")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
