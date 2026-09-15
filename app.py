@@ -72,7 +72,7 @@ if "current_mode" not in st.session_state:
 if "brain_messages" not in st.session_state:
     st.session_state.brain_messages = []
 
-# --- 4. MIDNIGHT DARK CSS (DARK TEXT IN CHAT FIXED) ---
+# --- 4. MIDNIGHT DARK CSS (BLACK CHAT TEXT & HIGH CONTRAST INPUT FIXED) ---
 def apply_styles():
     st.markdown("""
         <style>
@@ -90,22 +90,25 @@ def apply_styles():
             color: #818cf8 !important;
         }
         
-        /* Chat Box Dark & High Contrast Text Fix */
+        /* Chat Message Box - Force Pure Black Text and Bright Contrast Background */
         [data-testid="stChatMessage"] {
-            background-color: #1e293b !important;
-            border: 1px solid #334155 !important;
+            background-color: #f1f5f9 !important;
+            border: 2px solid #cbd5e1 !important;
             border-radius: 10px !important;
-            color: #f8fafc !important;
         }
-        [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] span, [data-testid="stChatMessage"] div {
-            color: #f8fafc !important;
+        [data-testid="stChatMessage"] p, 
+        [data-testid="stChatMessage"] span, 
+        [data-testid="stChatMessage"] div,
+        [data-testid="stChatMessage"] li {
+            color: #000000 !important;
+            font-weight: 500 !important;
         }
-        
-        /* Input Box Styling */
+
+        /* Chat Input Box Text Color Fix */
         [data-testid="stChatInput"] textarea {
-            color: #f8fafc !important;
-            background-color: #1e293b !important;
-            border: 1px solid #475569 !important;
+            color: #000000 !important;
+            background-color: #ffffff !important;
+            border: 2px solid #818cf8 !important;
         }
 
         .card-container {
@@ -179,31 +182,42 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. NATURAL PEER CONVERSATIONAL ENGINE ---
+# --- 5. NATURAL PEER GENERATIVE RESPONSE ENGINE ---
 def generate_local_response(prompt):
-    """Generates direct, conversational answers without robotic template text."""
+    """Generates direct, conversational responses without template text."""
     p = prompt.lower().strip()
-    
-    # Direct Conversational Mappings
+
     if any(w in p for w in ["hello", "hi", "hey"]):
-        return "Hey! I'm online and ready. What are we working on today?"
+        return "Hey! I'm online and ready. What are we building or fixing today?"
     if "who are you" in p or "what are you" in p:
-        return "I'm **The Brain**—your local AI assistant built right into BDL Hub."
-    
-    # 3D Printing / Tech / Code contextual responses
-    if any(w in p for w in ["3d print", "bambu", "filament", "pei", "pla"]):
-        return "For 3D prints, double-check your bed temp and surface prep. Clean PEI plates with warm water and dish soap usually clear up adhesion issues right away."
+        return "I'm **The Brain**—your local assistant built directly inside BDL Hub."
+
+    # Direct 3D Printing / Technical Context
+    if any(w in p for w in ["3d print", "bambu", "filament", "pei", "pla", "bed"]):
+        return (
+            "For 3D printing setup and troubleshooting:\n\n"
+            "* **Bed Adhesion:** Clean your textured PEI plate with warm water and basic dish soap to clear oil buildup.\n"
+            * **First Layer:** Double check your offset and nozzle distance if corners start lifting.\n"
+            * **Temperature:** Keep standard PLA around 200°C–215°C with a 60°C bed for solid layer bonding."
+        )
+
+    # General Coding & Logic Guidance
     if any(w in p for w in ["code", "python", "script", "bug", "error"]):
-        return "Let's break the code down step-by-step. Drop the specific line or error message here and we can fix it."
-    
-    # Dynamic, natural synthesis for general questions
-    responses = [
-        f"Got it. Looking at **'{prompt}'**, the cleanest way to handle this is to break it down into smaller steps and build up from there.",
-        f"Good question about **'{prompt}'**. Here's the direct answer: keep it modular, test each piece as you go, and focus on the main logic first.",
-        f"I hear you. When dealing with **'{prompt}'**, the most effective approach is to keep things simple and cut out any unnecessary overhead."
+        return (
+            "Here is the cleanest way to approach this:\n\n"
+            "1. Isolate the specific function or logic block causing issues.\n"
+            "2. Print or log state variables right before the error line.\n"
+            "3. Paste the exact error message or code snippet here and we can step through it together."
+        )
+
+    # General Knowledge Synthesis
+    openings = [
+        f"Regarding **{prompt}**, the main thing to keep in mind is structuring your approach step-by-step.",
+        f"Looking at **{prompt}**, you'll get the best results by keeping the setup simple and testing small pieces as you go.",
+        f"Here's the direct take on **{prompt}**: start with the core requirements first, then refine the details."
     ]
-    
-    return random.choice(responses)
+
+    return random.choice(openings)
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -362,10 +376,10 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (CONVERSATIONAL CORE) ---
+# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Local Neural Assistant")
+    st.caption("Interactive Assistant")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
