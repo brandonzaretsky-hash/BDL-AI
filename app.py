@@ -2,9 +2,7 @@ import streamlit as st
 import sqlite3
 import random
 import re
-import difflib
 import wikipediaapi
-import wikipedia
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -185,7 +183,7 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. SEARCH-CHECKING & QUESTION-ANSWERING ENGINE ---
+# --- 5. DIRECT QUESTION & SEARCH RESOLUTION ENGINE ---
 def generate_local_response(prompt, history):
     p = prompt.lower().strip()
     wiki_api = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
@@ -205,54 +203,36 @@ def generate_local_response(prompt, history):
         "I'm here. What topic or project are we tackling?"
     ]
 
-    # Greetings & Identity
+    # 1. Greetings & Identity
     if any(w in p for w in ["hello", "hi", "hey"]):
         return random.choice(greetings)
     if "who are you" in p or "what are you" in p:
         return "I'm **The Brain**—your interactive local assistant built into BDL Hub."
 
-    # Direct Question Rules (Count / Specific Question Intercepts)
-    if "how many times" in p and ("trump" in p or "presdint" in p or "president" in p):
+    # 2. Direct Answer Check for Specific Questions
+    if "trump" in p and ("how many times" in p or "presdint" in p or "president" in p or "elected" in p):
         st.session_state.last_searched_topic = "Donald Trump"
-        return "Donald Trump has been elected President of the United States **two times**. He served his first term as the 45th president from 2017 to 2021, and assumed office for his second term as the 47th president on January 20, 2025."
+        return "Donald Trump has been elected President of the United States **two times**. He served as the 45th president from 2017 to 2021, and as the 47th president following his second inauguration on January 20, 2025."
 
-    # Follow-up Requests: Repeat / Explain / Make Longer
-    is_longer_req = any(phrase in p for phrase in ["make it longer", "more detail", "elaborate", "tell me more", "expand"])
-    is_repeat_req = any(phrase in p for phrase in ["can you repeat", "say that again", "what did you say", "repeat that"])
+    # 3. Topic Extraction & Targeted Page Fetch
+    topic_target = None
+    if "trump" in p:
+        topic_target = "Donald Trump"
+    elif "biden" in p:
+        topic_target = "Joe Biden"
+    elif "obama" in p:
+        topic_target = "Barack Obama"
+    else:
+        # Strip common question prefix words to get the pure subject
+        clean_words = re.sub(r'^(how many times|how many|who is|what is|tell me about|has|have|been a|presdint|president|explain|how does|why is|a)\s+', '', p, flags=re.IGNORECASE).strip()
+        if clean_words:
+            topic_target = clean_words.title()
 
-    if (is_longer_req or is_repeat_req) and st.session_state.last_searched_topic:
-        topic = st.session_state.last_searched_topic
-        page = wiki_api.page(topic)
+    # 4. Fetch Main Page directly using the extracted target
+    if topic_target:
+        page = wiki_api.page(topic_target)
         if page.exists():
-            sentences = page.summary.split('. ')
-            if is_longer_req:
-                longer_paragraph = ". ".join(sentences[:6])
-                if not longer_paragraph.endswith('.'):
-                    longer_paragraph += '.'
-                return f"Expanding on **{topic.title()}**:\n\n{longer_paragraph}"
-            else:
-                short_paragraph = ". ".join(sentences[:3])
-                if not short_paragraph.endswith('.'):
-                    short_paragraph += '.'
-                return f"Repeating the summary for **{topic.title()}**:\n\n{short_paragraph}"
-
-    # Clean query for search lookup
-    clean_query = re.sub(r'^(how many times|how many|who is|what is|tell me about|has|have|been a|presdint|president|explain|how does|why is)\s+', '', p, flags=re.IGNORECASE).strip()
-
-    matched_title = None
-    try:
-        # Check Wikipedia's search engine FIRST to handle typos and full questions
-        search_results = wikipedia.search(clean_query if clean_query else prompt)
-        if search_results:
-            matched_title = search_results[0]
-    except Exception:
-        pass
-
-    # Fetch page by verified search title
-    if matched_title:
-        page = wiki_api.page(matched_title)
-        if page.exists():
-            st.session_state.last_searched_topic = matched_title
+            st.session_state.last_searched_topic = topic_target
             summary_sentences = page.summary.split('. ')
             
             short_paragraph = ". ".join(summary_sentences[:3])
@@ -261,10 +241,10 @@ def generate_local_response(prompt, history):
             
             return f"{random.choice(openers)}{short_paragraph}"
 
-    # Fallback to last topic if set
+    # 5. Fallback to Previous Context
     if st.session_state.last_searched_topic:
         parent_topic = st.session_state.last_searched_topic.title()
-        return f"Regarding **{parent_topic}**: I'm following up on our previous topic. What specific detail or question would you like to explore next?"
+        return f"Regarding **{parent_topic}**: What specific detail or question would you like to explore next?"
     
     return "I couldn't find a direct record for that. Try giving me a specific topic keyword or rephrasing your prompt!"
 
@@ -425,10 +405,10 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH SEARCH CHECKING) ---
+# --- PAGE: THE BRAIN ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Search Pre-Checking & Typo Resolution")
+    st.caption("Interactive Assistant with Exact Subject Routing")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
