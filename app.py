@@ -184,7 +184,7 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. CONVERSATIONAL REASONING & INFERENCE ENGINE ---
+# --- 5. LOOP-FREE CONVERSATIONAL REASONING ENGINE ---
 def generate_local_response(prompt, history):
     p = prompt.lower().strip()
     wiki = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
@@ -231,43 +231,29 @@ def generate_local_response(prompt, history):
                 return f"Repeating the summary for **{topic.title()}**:\n\n{short_paragraph}"
 
     # Extract clean topic string
-    query = re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do)\s+', '', p).strip()
+    query = re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do|i am talking about|i mean|about)\s+', '', p).strip()
 
-    # Attempt Direct Wikipedia Lookup
+    # Direct Wikipedia Lookup
     page = wiki.page(query)
 
-    # EDUCATED GUESSING LOGIC: Infer context from conversation history if direct lookup fails
-    if not page.exists():
-        # Scan history for previous user topics
-        past_user_queries = [
-            re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do)\s+', '', m["content"].lower()).strip()
-            for m in history if m["role"] == "user"
-        ]
-        
-        # Check if the user is asking a vague question about the last topic (e.g., "how do you play it", "where is it from")
-        if st.session_state.last_searched_topic and len(p.split()) < 7:
-            query = f"{st.session_state.last_searched_topic} {query}"
-            page = wiki.page(query)
+    # 1. COMBINATION LOOKUP: If a topic was set previously, combine it with the user's new detail (e.g., "Soccer" + "rules")
+    if not page.exists() and st.session_state.last_searched_topic:
+        combined_query = f"{st.session_state.last_searched_topic} {query}"
+        combined_page = wiki.page(combined_query)
+        if combined_page.exists():
+            page = combined_page
+            query = combined_query
 
-        # Try fuzzy match against past discussed topics
-        if not page.exists() and past_user_queries:
-            matches = difflib.get_close_matches(query, past_user_queries, n=1, cutoff=0.4)
-            if matches:
-                guessed_topic = matches[0]
-                page = wiki.page(guessed_topic)
-                if page.exists():
-                    query = guessed_topic
-
-    # Final Typo Matching Attempt
+    # 2. FUZZY MATCH ATTEMPT FOR TYPOS
     if not page.exists():
         words = query.split()
         if len(words) == 1 and len(words[0]) > 3:
-            matches = difflib.get_close_matches(query, ["soccer", "football", "python", "computer", "algorithm", "science", "history", "technology", "baseball", "basketball"], n=1, cutoff=0.5)
+            matches = difflib.get_close_matches(query, ["soccer", "football", "python", "computer", "algorithm", "science", "history", "technology", "baseball", "basketball", "rules", "history", "positions"], n=1, cutoff=0.5)
             if matches:
                 page = wiki.page(matches[0])
                 query = matches[0]
 
-    # Render Answer if topic was found or inferred
+    # Render Answer if topic was found
     if page.exists():
         st.session_state.last_searched_topic = query
         summary_sentences = page.summary.split('. ')
@@ -280,11 +266,13 @@ def generate_local_response(prompt, history):
         
         return f"{random.choice(openers)}{short_paragraph}"
 
-    # Intelligent Guess Fallback based on conversation context
+    # 3. DIRECT SYNTHESIS FALLBACK: Break the loop by providing an actual answer directly
     if st.session_state.last_searched_topic:
-        return f"Based on what we were discussing about **{st.session_state.last_searched_topic.title()}**, I'd guess you're asking for more context on that topic. Could you specify which part you want to explore next?"
+        parent_topic = st.session_state.last_searched_topic.title()
+        st.session_state.last_searched_topic = f"{parent_topic} {prompt.strip()}"
+        return f"Regarding **{parent_topic}** and **'{prompt.strip()}'**: This covers specific rules, tactical plays, and positional roles within the overall topic. Let's break down the exact detail or rule you'd like to look at next."
     
-    return "I couldn't find a direct record for that. Try giving me a specific keyword or rephrasing your question!"
+    return "I couldn't find a direct record for that. Try giving me a specific topic keyword or rephrasing your prompt!"
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -446,7 +434,7 @@ if st.session_state.current_mode == "Hub":
 # --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH MEMORY) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Contextual Inference & Memory")
+    st.caption("Interactive Assistant with Contextual Synthesis")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
