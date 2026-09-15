@@ -214,7 +214,7 @@ def generate_local_response(prompt, history):
         st.session_state.last_searched_topic = "Donald Trump"
         return "Donald Trump has been elected President of the United States **two times**. He served as the 45th president from 2017 to 2021, and as the 47th president following his second inauguration on January 20, 2025."
 
-    # 3. Direct Intercept for Messi & Ballon d'Or Questions (Fixes typos like "balandoor", "balandors", "messy", "messi")
+    # 3. Direct Intercept for Messi & Ballon d'Or Questions
     if ("messi" in p or "messy" in p) and ("balan" in p or "ballon" in p or "dor" in p or "award" in p or "troph" in p or "how many" in p):
         st.session_state.last_searched_topic = "Lionel Messi"
         return "Lionel Messi has won the Ballon d'Or **8 times** (2009, 2010, 2011, 2012, 2015, 2019, 2021, and 2023). This is the record for the most Ballon d'Or awards won by any player in football history."
