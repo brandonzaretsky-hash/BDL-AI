@@ -72,7 +72,7 @@ if "current_mode" not in st.session_state:
 if "brain_messages" not in st.session_state:
     st.session_state.brain_messages = []
 
-# --- 4. MIDNIGHT DARK CSS (BLACK CHAT TEXT & HIGH CONTRAST INPUT FIXED) ---
+# --- 4. MIDNIGHT DARK CSS (BLACK TEXT FIX) ---
 def apply_styles():
     st.markdown("""
         <style>
@@ -90,7 +90,7 @@ def apply_styles():
             color: #818cf8 !important;
         }
         
-        /* Chat Message Box - Force Pure Black Text and Bright Contrast Background */
+        /* Chat Message Box - Force Pure Black Text */
         [data-testid="stChatMessage"] {
             background-color: #f1f5f9 !important;
             border: 2px solid #cbd5e1 !important;
@@ -182,9 +182,8 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. NATURAL PEER GENERATIVE RESPONSE ENGINE ---
+# --- 5. GENERATIVE RESPONSE ENGINE ---
 def generate_local_response(prompt):
-    """Generates direct, conversational responses without template text."""
     p = prompt.lower().strip()
 
     if any(w in p for w in ["hello", "hi", "hey"]):
@@ -192,16 +191,16 @@ def generate_local_response(prompt):
     if "who are you" in p or "what are you" in p:
         return "I'm **The Brain**—your local assistant built directly inside BDL Hub."
 
-    # Direct 3D Printing / Technical Context
+    # Direct 3D Printing Context (Unclosed quote fixed here)
     if any(w in p for w in ["3d print", "bambu", "filament", "pei", "pla", "bed"]):
         return (
             "For 3D printing setup and troubleshooting:\n\n"
             "* **Bed Adhesion:** Clean your textured PEI plate with warm water and basic dish soap to clear oil buildup.\n"
-            * **First Layer:** Double check your offset and nozzle distance if corners start lifting.\n"
-            * **Temperature:** Keep standard PLA around 200°C–215°C with a 60°C bed for solid layer bonding."
+            "* **First Layer:** Double check your offset and nozzle distance if corners start lifting.\n"
+            "* **Temperature:** Keep standard PLA around 200°C–215°C with a 60°C bed for solid layer bonding."
         )
 
-    # General Coding & Logic Guidance
+    # General Coding Logic
     if any(w in p for w in ["code", "python", "script", "bug", "error"]):
         return (
             "Here is the cleanest way to approach this:\n\n"
