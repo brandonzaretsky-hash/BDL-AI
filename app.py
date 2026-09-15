@@ -181,17 +181,41 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. WIKIPEDIA KNOWLEDGE & SYNTHESIS ENGINE ---
-def generate_local_response(prompt):
+# --- 5. MEMORY-AWARE & DYNAMIC RESPONSE ENGINE ---
+def generate_local_response(prompt, history):
     p = prompt.lower().strip()
+
+    # Dynamic Opening Transitions
+    openers = [
+        "Here's my breakdown: ",
+        "To put it simply, ",
+        "Here is what you need to know: ",
+        "Looking into that, ",
+        "Here's the direct answer: "
+    ]
+    
+    # Dynamic Conversational Greetings
+    greetings = [
+        "Hey! Ready whenever you are. What's on your mind?",
+        "Hello! I'm online and tracking our session. What are we diving into?",
+        "Hey there! What can I help you work through or explain next?",
+        "I'm here. What topic or project are we tackling?"
+    ]
 
     # Conversational shortcuts
     if any(w in p for w in ["hello", "hi", "hey"]):
-        return "Hey! I'm online and ready. What are we looking into today?"
+        return random.choice(greetings)
     if "who are you" in p or "what are you" in p:
-        return "I'm **The Brain**—your interactive assistant built into BDL Hub."
+        return "I'm **The Brain**—your interactive local assistant built into BDL Hub, keeping track of our ongoing conversation memory."
 
-    # Clean query term for search
+    # References to past memory
+    if len(history) > 2 and any(w in p for w in ["remember", "last question", "earlier", "we said"]):
+        prev_user_msgs = [m["content"] for m in history if m["role"] == "user"]
+        if len(prev_user_msgs) > 1:
+            last_topic = prev_user_msgs[-2]
+            return f"Earlier in our chat, we were talking about **'{last_topic}'**. Following up on that, what specific detail would you like to build on?"
+
+    # Extract clean query term
     query = re.sub(r'^(what is|what are|who is|tell me about|explain)\s+', '', p).strip()
 
     try:
@@ -199,18 +223,28 @@ def generate_local_response(prompt):
         page = wiki.page(query)
 
         if page.exists():
-            # Extract first paragraph
             summary_sentences = page.summary.split('. ')
-            short_paragraph = ". ".join(summary_sentences[:3])
+            
+            # Randomly select a 2 to 3 sentence slice to make every generation feel unique
+            start_idx = random.choice([0, 1]) if len(summary_sentences) > 3 else 0
+            selected_sentences = summary_sentences[start_idx:start_idx+3]
+            
+            short_paragraph = ". ".join(selected_sentences)
             if not short_paragraph.endswith('.'):
                 short_paragraph += '.'
             
-            return f"{short_paragraph}"
+            # Combine dynamic opener with the facts
+            return f"{random.choice(openers)}{short_paragraph}"
         else:
-            return f"I couldn't find a detailed entry for '{query}'. Try asking with a slightly broader term or specific keyword!"
+            fallback_options = [
+                f"I don't have a direct knowledge entry for '{query}' stored yet, but I've logged it in our chat memory. Want to try a broader search term?",
+                f"No exact match found for '{query}'. Try giving me a slightly different phrasing or keyword so I can pull up the context!",
+                f"I looked up '{query}' but couldn't find a complete match. Rephrase the query and we can search again."
+            ]
+            return random.choice(fallback_options)
 
-    except Exception as e:
-        return f"I had trouble looking up that topic right now. Try rephrasing your question!"
+    except Exception:
+        return "I hit a temporary connection glitch while looking up that topic. Ask me again or try rephrasing!"
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -369,22 +403,25 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE) ---
+# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH MEMORY) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant")
+    st.caption("Interactive Assistant with Session Memory")
 
+    # Render previous conversation history from session state
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("Chat with The Brain..."):
+        # Store user input in history
         st.session_state.brain_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Generate response passing full conversation history
         with st.chat_message("assistant"):
-            response_text = generate_local_response(prompt)
+            response_text = generate_local_response(prompt, st.session_state.brain_messages)
             st.markdown(response_text)
             st.session_state.brain_messages.append({"role": "assistant", "content": response_text})
 
