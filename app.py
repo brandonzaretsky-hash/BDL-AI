@@ -1,5 +1,7 @@
 import streamlit as st
 import sqlite3
+import random
+import re
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -8,7 +10,6 @@ st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
 DB_FILE = "bdl_users.db"
 
 def init_db():
-    """Creates the SQLite database and seeds root SuperAdmin account."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('''
@@ -18,7 +19,6 @@ def init_db():
             role TEXT NOT NULL
         )
     ''')
-    # Seed default SuperAdmin if missing
     c.execute("SELECT * FROM users WHERE username = 'Brandon'")
     if not c.fetchone():
         c.execute("INSERT INTO users VALUES ('Brandon', '0809', 'SuperAdmin')")
@@ -69,30 +69,26 @@ if "role" not in st.session_state:
     st.session_state.role = "Free"
 if "current_mode" not in st.session_state:
     st.session_state.current_mode = "Hub"
+if "brain_messages" not in st.session_state:
+    st.session_state.brain_messages = []
 
 # --- 4. MIDNIGHT DARK (EYE-FRIENDLY) CSS ---
 def apply_styles():
     st.markdown("""
         <style>
-        /* Base Background & Body Text */
         .stApp {
             background-color: #0f141d;
             color: #d0d7e5;
             font-family: 'Segoe UI', system-ui, sans-serif;
         }
-        
-        /* Softer Headings */
         h1, h2, h3 {
             color: #e2e8f0 !important;
             text-align: center;
             font-weight: 600;
         }
-
         h1 {
             color: #818cf8 !important;
         }
-        
-        /* Card Container Base */
         .card-container {
             position: relative;
             background: #182030;
@@ -109,8 +105,6 @@ def apply_styles():
             overflow: hidden;
             margin-bottom: 20px;
         }
-
-        /* Subdued Caution Tape Overlay */
         .caution-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -123,7 +117,6 @@ def apply_styles():
             );
             z-index: 1;
         }
-
         .caution-banner {
             position: absolute;
             top: 50%;
@@ -140,14 +133,11 @@ def apply_styles():
             z-index: 2;
             white-space: nowrap;
         }
-
         .card-content {
             z-index: 0;
             filter: blur(2.5px);
             opacity: 0.6;
         }
-
-        /* Buttons Styling */
         .stButton>button {
             background-color: #1e293b;
             color: #94a3b8;
@@ -161,8 +151,6 @@ def apply_styles():
             color: #e0e7ff;
             background-color: #312e81;
         }
-
-        /* Sidebar Customization */
         section[data-testid="stSidebar"] {
             background-color: #111827;
             border-right: 1px solid #1f2937;
@@ -172,7 +160,49 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. SIDEBAR AUTH & ADMIN MANAGEMENT ---
+# --- 5. STANDALONE GENERATIVE TEXT ENGINE ---
+def generate_local_response(prompt):
+    """Generates standalone responses using local synthesis rules."""
+    prompt_clean = prompt.lower().strip()
+    words = re.findall(r'\b\w+\b', prompt_clean)
+    
+    # Greetings & Identity
+    if any(w in prompt_clean for w in ["hello", "hi", "hey"]):
+        return "Greetings. The Brain core is fully operational and ready for instruction."
+    if "who are you" in prompt_clean or "what are you" in prompt_clean:
+        return "I am **The Brain**, the standalone generative text engine built inside BDL Hub."
+
+    # Code / Development queries
+    if any(w in prompt_clean for w in ["code", "python", "script", "app", "build"]):
+        return (
+            "**Neural Code Synthesis:**\n\n"
+            "To structure your request effectively, modularize the inputs into dedicated handler functions, "
+            "verify state conditions, and return formatted outputs directly to the UI layer."
+        )
+
+    # General Knowledge / Analytical queries
+    openers = [
+        "Analyzing prompt metrics...",
+        "Processing contextual vectors...",
+        "Synthesizing knowledge nodes...",
+        "Evaluating system query..."
+    ]
+    
+    body = (
+        f"Based on the parameters derived from your query regarding **'{prompt}'**, "
+        f"the internal core identifies key focus nodes across {len(words)} primary variables. "
+        "The model recommends structuring your workflow around iterative testing and modular expansion."
+    )
+    
+    conclusions = [
+        "\n\nSystem status: Optimal. Ready for follow-up inputs.",
+        "\n\nLet me know if you need deeper analysis on specific sub-nodes.",
+        "\n\nCore memory synced for this session."
+    ]
+    
+    return f"{random.choice(openers)}\n\n{body}{random.choice(conclusions)}"
+
+# --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
     st.title("🛡️ Access Panel")
     
@@ -219,7 +249,6 @@ with st.sidebar:
                 else:
                     st.warning("Fill out all fields.")
 
-    # SUPERADMIN & ADMIN SIDEBAR PANEL
     if st.session_state.role in ["Admin", "SuperAdmin"]:
         st.markdown("---")
         st.subheader("👑 Admin User Deck")
@@ -238,10 +267,9 @@ with st.sidebar:
                     update_role(u, "User")
                     st.rerun()
 
-# --- 6. ROUTING ENGINE & HUB LAYOUT ---
+# --- 7. ROUTING ENGINE & HUB LAYOUT ---
 
 def attempt_entry(mode_name, is_locked):
-    """Enforces role access logic for locked and active modes."""
     is_admin = st.session_state.role in ["Admin", "SuperAdmin"]
     
     if is_locked and not is_admin:
@@ -258,10 +286,8 @@ if st.session_state.current_mode == "Hub":
     is_admin_user = st.session_state.role in ["Admin", "SuperAdmin"]
     prefix = "Enter " if is_admin_user else ""
 
-    # Row 1: 4 Cards
     col1, col2, col3, col4 = st.columns(4)
     
-    # 1. Picture-Rama
     with col1:
         st.markdown("""
             <div class='card-container'>
@@ -276,22 +302,18 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Picture-Rama", key="btn_pr"):
             attempt_entry("Picture-Rama", is_locked=True)
 
-    # 2. The Brain
     with col2:
         st.markdown("""
             <div class='card-container'>
-                <div class='caution-overlay'></div>
-                <div class='caution-banner'>COMING SOON</div>
-                <div class='card-content'>
+                <div class='card-content-unlocked'>
                     <div style='font-size: 50px;'>🧠</div>
                     <h3>The Brain</h3>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         if st.button(f"{prefix}The Brain", key="btn_tb"):
-            attempt_entry("The Brain", is_locked=True)
+            attempt_entry("The Brain", is_locked=False)
 
-    # 3. Crowd Brain
     with col3:
         st.markdown("""
             <div class='card-container'>
@@ -306,7 +328,6 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Crowd Brain", key="btn_cb"):
             attempt_entry("Crowd Brain", is_locked=True)
 
-    # 4. The Code
     with col4:
         st.markdown("""
             <div class='card-container'>
@@ -323,7 +344,6 @@ if st.session_state.current_mode == "Hub":
 
     st.markdown("---")
 
-    # Row 2: Wiki-Brain
     col_w1, col_w2, col_w3 = st.columns([1, 2, 1])
     with col_w2:
         st.markdown("""
@@ -339,7 +359,29 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- MODULE PLACEHOLDER VIEWS (ADMIN UNLOCKED MODE) ---
+# --- PAGE: THE BRAIN (STANDALONE LLM CORE) ---
+elif st.session_state.current_mode == "The Brain":
+    st.title("🧠 The Brain")
+    st.caption("Standalone Generative Engine | Local Neural Core")
+
+    # Render previous conversation history
+    for msg in st.session_state.brain_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # User input chat box
+    if prompt := st.chat_input("Interact with The Brain core..."):
+        st.session_state.brain_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Generate standalone local output
+        with st.chat_message("assistant"):
+            response_text = generate_local_response(prompt)
+            st.markdown(response_text)
+            st.session_state.brain_messages.append({"role": "assistant", "content": response_text})
+
+# --- OTHER UNLOCKED MODULE PLACEHOLDERS ---
 else:
     st.title(f"⚡ {st.session_state.current_mode}")
     st.warning("⚠️ Admin Override Active: You have bypassed the Caution Tape overlay.")
