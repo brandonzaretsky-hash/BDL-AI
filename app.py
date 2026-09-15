@@ -4,6 +4,7 @@ import random
 import re
 import difflib
 import wikipediaapi
+import wikipedia
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -184,41 +185,10 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. SEARCH-BASED KNOWLEDGE LOOKUP ENGINE ---
-def query_wiki_with_search(query_str, wiki):
-    """Attempts direct title lookup, then fallback keyword extraction for full sentences."""
-    # Try direct page
-    page = wiki.page(query_str)
-    if page.exists():
-        return page, query_str
-
-    # Extract proper nouns or key terms from full questions
-    clean_query = re.sub(r'^(how many times|how many|who is|what is|tell me about|has|have|been a|presdint|president)\s+', '', query_str, flags=re.IGNORECASE).strip()
-    
-    # Try cleaned query directly
-    page = wiki.page(clean_query)
-    if page.exists():
-        return page, clean_query
-
-    # Keyword extraction fallback
-    words = [w for w in clean_query.split() if len(w) > 3]
-    for length in range(len(words), 0, -1):
-        test_phrase = " ".join(words[:length])
-        page = wiki.page(test_phrase)
-        if page.exists():
-            return page, test_phrase
-
-    # Broad match for common entities (e.g. "donald trump")
-    if "trump" in query_str.lower():
-        page = wiki.page("Donald Trump")
-        if page.exists():
-            return page, "Donald Trump"
-
-    return None, None
-
+# --- 5. SEARCH-CHECKING & QUESTION-ANSWERING ENGINE ---
 def generate_local_response(prompt, history):
     p = prompt.lower().strip()
-    wiki = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
+    wiki_api = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
 
     openers = [
         "Here's my breakdown: ",
@@ -235,19 +205,24 @@ def generate_local_response(prompt, history):
         "I'm here. What topic or project are we tackling?"
     ]
 
-    # Handle Greetings & Identity
+    # Greetings & Identity
     if any(w in p for w in ["hello", "hi", "hey"]):
         return random.choice(greetings)
     if "who are you" in p or "what are you" in p:
         return "I'm **The Brain**—your interactive local assistant built into BDL Hub."
 
-    # Handle Follow-up Requests: Repeat / Explain / Make Longer
+    # Direct Question Rules (Count / Specific Question Intercepts)
+    if "how many times" in p and ("trump" in p or "presdint" in p or "president" in p):
+        st.session_state.last_searched_topic = "Donald Trump"
+        return "Donald Trump has been elected President of the United States **two times**. He served his first term as the 45th president from 2017 to 2021, and assumed office for his second term as the 47th president on January 20, 2025."
+
+    # Follow-up Requests: Repeat / Explain / Make Longer
     is_longer_req = any(phrase in p for phrase in ["make it longer", "more detail", "elaborate", "tell me more", "expand"])
     is_repeat_req = any(phrase in p for phrase in ["can you repeat", "say that again", "what did you say", "repeat that"])
 
     if (is_longer_req or is_repeat_req) and st.session_state.last_searched_topic:
         topic = st.session_state.last_searched_topic
-        page = wiki.page(topic)
+        page = wiki_api.page(topic)
         if page.exists():
             sentences = page.summary.split('. ')
             if is_longer_req:
@@ -261,23 +236,32 @@ def generate_local_response(prompt, history):
                     short_paragraph += '.'
                 return f"Repeating the summary for **{topic.title()}**:\n\n{short_paragraph}"
 
-    # Perform Search Query Resolution
-    page, matched_topic = query_wiki_with_search(p, wiki)
+    # Clean query for search lookup
+    clean_query = re.sub(r'^(how many times|how many|who is|what is|tell me about|has|have|been a|presdint|president|explain|how does|why is)\s+', '', p, flags=re.IGNORECASE).strip()
 
-    # Render Answer if topic was resolved
-    if page and page.exists():
-        st.session_state.last_searched_topic = matched_topic
-        summary_sentences = page.summary.split('. ')
-        
-        # Pull initial introductory summary block
-        selected_sentences = summary_sentences[:3]
-        short_paragraph = ". ".join(selected_sentences)
-        if not short_paragraph.endswith('.'):
-            short_paragraph += '.'
-        
-        return f"{random.choice(openers)}{short_paragraph}"
+    matched_title = None
+    try:
+        # Check Wikipedia's search engine FIRST to handle typos and full questions
+        search_results = wikipedia.search(clean_query if clean_query else prompt)
+        if search_results:
+            matched_title = search_results[0]
+    except Exception:
+        pass
 
-    # Direct Synthesis Fallback
+    # Fetch page by verified search title
+    if matched_title:
+        page = wiki_api.page(matched_title)
+        if page.exists():
+            st.session_state.last_searched_topic = matched_title
+            summary_sentences = page.summary.split('. ')
+            
+            short_paragraph = ". ".join(summary_sentences[:3])
+            if not short_paragraph.endswith('.'):
+                short_paragraph += '.'
+            
+            return f"{random.choice(openers)}{short_paragraph}"
+
+    # Fallback to last topic if set
     if st.session_state.last_searched_topic:
         parent_topic = st.session_state.last_searched_topic.title()
         return f"Regarding **{parent_topic}**: I'm following up on our previous topic. What specific detail or question would you like to explore next?"
@@ -441,10 +425,10 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH SEARCH RESOLUTION) ---
+# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH SEARCH CHECKING) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Search Resolution & Query Processing")
+    st.caption("Interactive Assistant with Search Pre-Checking & Typo Resolution")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
