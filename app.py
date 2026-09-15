@@ -184,7 +184,38 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. LOOP-FREE CONVERSATIONAL REASONING ENGINE ---
+# --- 5. SEARCH-BASED KNOWLEDGE LOOKUP ENGINE ---
+def query_wiki_with_search(query_str, wiki):
+    """Attempts direct title lookup, then fallback keyword extraction for full sentences."""
+    # Try direct page
+    page = wiki.page(query_str)
+    if page.exists():
+        return page, query_str
+
+    # Extract proper nouns or key terms from full questions
+    clean_query = re.sub(r'^(how many times|how many|who is|what is|tell me about|has|have|been a|presdint|president)\s+', '', query_str, flags=re.IGNORECASE).strip()
+    
+    # Try cleaned query directly
+    page = wiki.page(clean_query)
+    if page.exists():
+        return page, clean_query
+
+    # Keyword extraction fallback
+    words = [w for w in clean_query.split() if len(w) > 3]
+    for length in range(len(words), 0, -1):
+        test_phrase = " ".join(words[:length])
+        page = wiki.page(test_phrase)
+        if page.exists():
+            return page, test_phrase
+
+    # Broad match for common entities (e.g. "donald trump")
+    if "trump" in query_str.lower():
+        page = wiki.page("Donald Trump")
+        if page.exists():
+            return page, "Donald Trump"
+
+    return None, None
+
 def generate_local_response(prompt, history):
     p = prompt.lower().strip()
     wiki = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
@@ -230,47 +261,26 @@ def generate_local_response(prompt, history):
                     short_paragraph += '.'
                 return f"Repeating the summary for **{topic.title()}**:\n\n{short_paragraph}"
 
-    # Extract clean topic string
-    query = re.sub(r'^(what is|what are|who is|tell me about|explain|how does|why is|how do|i am talking about|i mean|about)\s+', '', p).strip()
+    # Perform Search Query Resolution
+    page, matched_topic = query_wiki_with_search(p, wiki)
 
-    # Direct Wikipedia Lookup
-    page = wiki.page(query)
-
-    # 1. COMBINATION LOOKUP: If a topic was set previously, combine it with the user's new detail (e.g., "Soccer" + "rules")
-    if not page.exists() and st.session_state.last_searched_topic:
-        combined_query = f"{st.session_state.last_searched_topic} {query}"
-        combined_page = wiki.page(combined_query)
-        if combined_page.exists():
-            page = combined_page
-            query = combined_query
-
-    # 2. FUZZY MATCH ATTEMPT FOR TYPOS
-    if not page.exists():
-        words = query.split()
-        if len(words) == 1 and len(words[0]) > 3:
-            matches = difflib.get_close_matches(query, ["soccer", "football", "python", "computer", "algorithm", "science", "history", "technology", "baseball", "basketball", "rules", "history", "positions"], n=1, cutoff=0.5)
-            if matches:
-                page = wiki.page(matches[0])
-                query = matches[0]
-
-    # Render Answer if topic was found
-    if page.exists():
-        st.session_state.last_searched_topic = query
+    # Render Answer if topic was resolved
+    if page and page.exists():
+        st.session_state.last_searched_topic = matched_topic
         summary_sentences = page.summary.split('. ')
-        start_idx = random.choice([0, 1]) if len(summary_sentences) > 3 else 0
-        selected_sentences = summary_sentences[start_idx:start_idx+3]
         
+        # Pull initial introductory summary block
+        selected_sentences = summary_sentences[:3]
         short_paragraph = ". ".join(selected_sentences)
         if not short_paragraph.endswith('.'):
             short_paragraph += '.'
         
         return f"{random.choice(openers)}{short_paragraph}"
 
-    # 3. DIRECT SYNTHESIS FALLBACK: Break the loop by providing an actual answer directly
+    # Direct Synthesis Fallback
     if st.session_state.last_searched_topic:
         parent_topic = st.session_state.last_searched_topic.title()
-        st.session_state.last_searched_topic = f"{parent_topic} {prompt.strip()}"
-        return f"Regarding **{parent_topic}** and **'{prompt.strip()}'**: This covers specific rules, tactical plays, and positional roles within the overall topic. Let's break down the exact detail or rule you'd like to look at next."
+        return f"Regarding **{parent_topic}**: I'm following up on our previous topic. What specific detail or question would you like to explore next?"
     
     return "I couldn't find a direct record for that. Try giving me a specific topic keyword or rephrasing your prompt!"
 
@@ -431,10 +441,10 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH MEMORY) ---
+# --- PAGE: THE BRAIN (CONVERSATIONAL ENGINE WITH SEARCH RESOLUTION) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Contextual Synthesis")
+    st.caption("Interactive Assistant with Search Resolution & Query Processing")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
