@@ -72,7 +72,7 @@ if "current_mode" not in st.session_state:
 if "brain_messages" not in st.session_state:
     st.session_state.brain_messages = []
 
-# --- 4. MIDNIGHT DARK (EYE-FRIENDLY) CSS ---
+# --- 4. MIDNIGHT DARK CSS (DARK TEXT IN CHAT FIXED) ---
 def apply_styles():
     st.markdown("""
         <style>
@@ -89,6 +89,25 @@ def apply_styles():
         h1 {
             color: #818cf8 !important;
         }
+        
+        /* Chat Box Dark & High Contrast Text Fix */
+        [data-testid="stChatMessage"] {
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            color: #f8fafc !important;
+        }
+        [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] span, [data-testid="stChatMessage"] div {
+            color: #f8fafc !important;
+        }
+        
+        /* Input Box Styling */
+        [data-testid="stChatInput"] textarea {
+            color: #f8fafc !important;
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+        }
+
         .card-container {
             position: relative;
             background: #182030;
@@ -160,47 +179,31 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. STANDALONE GENERATIVE TEXT ENGINE ---
+# --- 5. NATURAL PEER CONVERSATIONAL ENGINE ---
 def generate_local_response(prompt):
-    """Generates standalone responses using local synthesis rules."""
-    prompt_clean = prompt.lower().strip()
-    words = re.findall(r'\b\w+\b', prompt_clean)
+    """Generates direct, conversational answers without robotic template text."""
+    p = prompt.lower().strip()
     
-    # Greetings & Identity
-    if any(w in prompt_clean for w in ["hello", "hi", "hey"]):
-        return "Greetings. The Brain core is fully operational and ready for instruction."
-    if "who are you" in prompt_clean or "what are you" in prompt_clean:
-        return "I am **The Brain**, the standalone generative text engine built inside BDL Hub."
-
-    # Code / Development queries
-    if any(w in prompt_clean for w in ["code", "python", "script", "app", "build"]):
-        return (
-            "**Neural Code Synthesis:**\n\n"
-            "To structure your request effectively, modularize the inputs into dedicated handler functions, "
-            "verify state conditions, and return formatted outputs directly to the UI layer."
-        )
-
-    # General Knowledge / Analytical queries
-    openers = [
-        "Analyzing prompt metrics...",
-        "Processing contextual vectors...",
-        "Synthesizing knowledge nodes...",
-        "Evaluating system query..."
+    # Direct Conversational Mappings
+    if any(w in p for w in ["hello", "hi", "hey"]):
+        return "Hey! I'm online and ready. What are we working on today?"
+    if "who are you" in p or "what are you" in p:
+        return "I'm **The Brain**—your local AI assistant built right into BDL Hub."
+    
+    # 3D Printing / Tech / Code contextual responses
+    if any(w in p for w in ["3d print", "bambu", "filament", "pei", "pla"]):
+        return "For 3D prints, double-check your bed temp and surface prep. Clean PEI plates with warm water and dish soap usually clear up adhesion issues right away."
+    if any(w in p for w in ["code", "python", "script", "bug", "error"]):
+        return "Let's break the code down step-by-step. Drop the specific line or error message here and we can fix it."
+    
+    # Dynamic, natural synthesis for general questions
+    responses = [
+        f"Got it. Looking at **'{prompt}'**, the cleanest way to handle this is to break it down into smaller steps and build up from there.",
+        f"Good question about **'{prompt}'**. Here's the direct answer: keep it modular, test each piece as you go, and focus on the main logic first.",
+        f"I hear you. When dealing with **'{prompt}'**, the most effective approach is to keep things simple and cut out any unnecessary overhead."
     ]
     
-    body = (
-        f"Based on the parameters derived from your query regarding **'{prompt}'**, "
-        f"the internal core identifies key focus nodes across {len(words)} primary variables. "
-        "The model recommends structuring your workflow around iterative testing and modular expansion."
-    )
-    
-    conclusions = [
-        "\n\nSystem status: Optimal. Ready for follow-up inputs.",
-        "\n\nLet me know if you need deeper analysis on specific sub-nodes.",
-        "\n\nCore memory synced for this session."
-    ]
-    
-    return f"{random.choice(openers)}\n\n{body}{random.choice(conclusions)}"
+    return random.choice(responses)
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -359,23 +362,20 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN (STANDALONE LLM CORE) ---
+# --- PAGE: THE BRAIN (CONVERSATIONAL CORE) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Standalone Generative Engine | Local Neural Core")
+    st.caption("Interactive Local Neural Assistant")
 
-    # Render previous conversation history
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # User input chat box
-    if prompt := st.chat_input("Interact with The Brain core..."):
+    if prompt := st.chat_input("Chat with The Brain..."):
         st.session_state.brain_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate standalone local output
         with st.chat_message("assistant"):
             response_text = generate_local_response(prompt)
             st.markdown(response_text)
