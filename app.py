@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import random
 import re
+import wikipediaapi
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -72,7 +73,7 @@ if "current_mode" not in st.session_state:
 if "brain_messages" not in st.session_state:
     st.session_state.brain_messages = []
 
-# --- 4. MIDNIGHT DARK CSS (BLACK TEXT FIX) ---
+# --- 4. MIDNIGHT DARK CSS ---
 def apply_styles():
     st.markdown("""
         <style>
@@ -90,7 +91,6 @@ def apply_styles():
             color: #818cf8 !important;
         }
         
-        /* Chat Message Box - Force Pure Black Text */
         [data-testid="stChatMessage"] {
             background-color: #f1f5f9 !important;
             border: 2px solid #cbd5e1 !important;
@@ -104,7 +104,6 @@ def apply_styles():
             font-weight: 500 !important;
         }
 
-        /* Chat Input Box Text Color Fix */
         [data-testid="stChatInput"] textarea {
             color: #000000 !important;
             background-color: #ffffff !important;
@@ -182,41 +181,36 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. GENERATIVE RESPONSE ENGINE ---
+# --- 5. WIKIPEDIA KNOWLEDGE & SYNTHESIS ENGINE ---
 def generate_local_response(prompt):
     p = prompt.lower().strip()
 
+    # Conversational shortcuts
     if any(w in p for w in ["hello", "hi", "hey"]):
-        return "Hey! I'm online and ready. What are we building or fixing today?"
+        return "Hey! I'm online and ready. What are we looking into today?"
     if "who are you" in p or "what are you" in p:
-        return "I'm **The Brain**—your local assistant built directly inside BDL Hub."
+        return "I'm **The Brain**—your interactive assistant built into BDL Hub."
 
-    # Direct 3D Printing Context (Unclosed quote fixed here)
-    if any(w in p for w in ["3d print", "bambu", "filament", "pei", "pla", "bed"]):
-        return (
-            "For 3D printing setup and troubleshooting:\n\n"
-            "* **Bed Adhesion:** Clean your textured PEI plate with warm water and basic dish soap to clear oil buildup.\n"
-            "* **First Layer:** Double check your offset and nozzle distance if corners start lifting.\n"
-            "* **Temperature:** Keep standard PLA around 200°C–215°C with a 60°C bed for solid layer bonding."
-        )
+    # Clean query term for search
+    query = re.sub(r'^(what is|what are|who is|tell me about|explain)\s+', '', p).strip()
 
-    # General Coding Logic
-    if any(w in p for w in ["code", "python", "script", "bug", "error"]):
-        return (
-            "Here is the cleanest way to approach this:\n\n"
-            "1. Isolate the specific function or logic block causing issues.\n"
-            "2. Print or log state variables right before the error line.\n"
-            "3. Paste the exact error message or code snippet here and we can step through it together."
-        )
+    try:
+        wiki = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
+        page = wiki.page(query)
 
-    # General Knowledge Synthesis
-    openings = [
-        f"Regarding **{prompt}**, the main thing to keep in mind is structuring your approach step-by-step.",
-        f"Looking at **{prompt}**, you'll get the best results by keeping the setup simple and testing small pieces as you go.",
-        f"Here's the direct take on **{prompt}**: start with the core requirements first, then refine the details."
-    ]
+        if page.exists():
+            # Extract first paragraph
+            summary_sentences = page.summary.split('. ')
+            short_paragraph = ". ".join(summary_sentences[:3])
+            if not short_paragraph.endswith('.'):
+                short_paragraph += '.'
+            
+            return f"{short_paragraph}"
+        else:
+            return f"I couldn't find a detailed entry for '{query}'. Try asking with a slightly broader term or specific keyword!"
 
-    return random.choice(openings)
+    except Exception as e:
+        return f"I had trouble looking up that topic right now. Try rephrasing your question!"
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
