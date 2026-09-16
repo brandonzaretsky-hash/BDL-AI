@@ -210,19 +210,26 @@ def generate_local_response(prompt, history):
         if "who are you" in p or "what are you" in p:
             return "I'm **The Brain**—your interactive local assistant built into BDL Hub."
 
-        # 2. Direct Intercept for Trump Questions
+        # 2. Direct Intercept for Trump
         if "trump" in p and ("how many times" in p or "presdint" in p or "president" in p or "elected" in p):
             st.session_state.last_searched_topic = "Donald Trump"
             return "Donald Trump has been elected President of the United States **two times**. He served as the 45th president from 2017 to 2021, and as the 47th president following his second inauguration on January 20, 2025."
 
-        # 3. Direct Intercept for Messi & Ballon d'Or Questions
+        # 3. Direct Intercept for Messi
         if ("messi" in p or "messy" in p) and ("balan" in p or "ballon" in p or "dor" in p or "award" in p or "troph" in p or "how many" in p):
             st.session_state.last_searched_topic = "Lionel Messi"
             return "Lionel Messi has won the Ballon d'Or **8 times** (2009, 2010, 2011, 2012, 2015, 2019, 2021, and 2023). This is the record for the most Ballon d'Or awards won by any player in football history."
 
-        # 4. General Subject Extraction & Topic Mapping
+        # 4. Direct Intercept for Ronaldo / Renaldo
+        if ("ronaldo" in p or "renaldo" in p or "cristiano" in p) and ("balan" in p or "ballon" in p or "dor" in p or "award" in p or "troph" in p or "how many" in p):
+            st.session_state.last_searched_topic = "Cristiano Ronaldo"
+            return "Cristiano Ronaldo has won the Ballon d'Or **5 times** (2008, 2013, 2014, 2016, and 2017)."
+
+        # 5. General Subject Extraction & Topic Mapping (Alias Fixes)
         topic_target = None
-        if "messi" in p or "messy" in p:
+        if "ronaldo" in p or "renaldo" in p or "cristiano" in p:
+            topic_target = "Cristiano Ronaldo"
+        elif "messi" in p or "messy" in p:
             topic_target = "Lionel Messi"
         elif "trump" in p:
             topic_target = "Donald Trump"
@@ -231,25 +238,28 @@ def generate_local_response(prompt, history):
         elif "obama" in p:
             topic_target = "Barack Obama"
         else:
-            # Clean common prefixes to get pure subject string
             clean_words = re.sub(r'^(how many|how many times|who is|what is|tell me about|has|have|been a|presdint|president|explain|how does|why is|a)\s+', '', p, flags=re.IGNORECASE).strip()
             if clean_words:
                 topic_target = clean_words.title()
 
-        # 5. Fetch Page directly using the target
+        # 6. Fetch Page directly using target with Disambiguation Guard
         if topic_target:
             page = wiki_api.page(topic_target)
             if page.exists():
                 st.session_state.last_searched_topic = topic_target
-                summary_sentences = page.summary.split('. ')
+                summary_sentences = [s.strip() for s in page.summary.split('. ') if s.strip()]
                 
-                short_paragraph = ". ".join(summary_sentences[:3])
-                if not short_paragraph.endswith('.'):
+                # Filter out sentences that end with disambiguation list teasers
+                valid_sentences = [s for s in summary_sentences if not s.lower().startswith("notable people with the name include")]
+                
+                short_paragraph = ". ".join(valid_sentences[:3])
+                if short_paragraph and not short_paragraph.endswith('.'):
                     short_paragraph += '.'
                 
-                return f"{random.choice(openers)}{short_paragraph}"
+                if short_paragraph:
+                    return f"{random.choice(openers)}{short_paragraph}"
 
-        # 6. Fallback Prompting
+        # 7. Fallback Prompting
         if st.session_state.last_searched_topic:
             parent_topic = st.session_state.last_searched_topic.title()
             return f"Regarding **{parent_topic}**: What specific detail or question would you like to explore next?"
