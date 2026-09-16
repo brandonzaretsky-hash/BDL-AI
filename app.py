@@ -1,8 +1,6 @@
 import streamlit as st
 import sqlite3
-import random
-import re
-import google.generativeai as genai
+from groq import Groq
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -181,32 +179,35 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. GEMINI API GENERATIVE TEXT ENGINE ---
-def generate_local_response(prompt, history):
+# --- 5. GROQ AI ENGINE ---
+def generate_groq_response(prompt, history):
     try:
-        # PULL KEY FROM STREAMLIT SECRETS
-        if "GEMINI_API_KEY" in st.secrets:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        else:
-            return "🚨 **API KEY MISSING**: Please add `GEMINI_API_KEY` to your Streamlit Secrets."
+        api_key = st.secrets["GROQ_API_KEY"]
+        client = Groq(api_key=api_key)
 
-        # Model configuration
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        # Format chat history for context
-        formatted_history = []
-        for msg in history[:-1]:
-            formatted_history.append(f"{msg['role'].capitalize()}: {msg['content']}")
-            
-        context_prompt = "\n".join(formatted_history)
-        full_input = f"{context_prompt}\nUser: {prompt}" if context_prompt else prompt
+        system_instruction = (
+            "You are 'The Brain' inside BDL Hub. "
+            "Respond concisely in a short, clear paragraph unless requested otherwise. "
+            "Automatically understand typos, remember past context, and provide natural explanations."
+        )
 
-        # Generate response
-        response = model.generate_content(full_input)
-        return response.text
+        messages = [{"role": "system", "content": system_instruction}]
+
+        # Append conversation history for memory
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=300,
+        )
+
+        return completion.choices[0].message.content
 
     except Exception as e:
-        return f"⚡ **Connection Delay:** Unable to reach Gemini core. Error details: {e}"
+        return "⚠️ Could not connect to Groq API. Please check that `GROQ_API_KEY` is set correctly in Streamlit secrets."
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -365,22 +366,22 @@ if st.session_state.current_mode == "Hub":
         if st.button(f"{prefix}Wiki-Brain", key="btn_wb"):
             attempt_entry("Wiki-Brain", is_locked=True)
 
-# --- PAGE: THE BRAIN ---
+# --- PAGE: THE BRAIN (GROQ POWERED) ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("AI Assistant powered by Gemini Engine")
+    st.caption("Interactive Assistant Powered by Groq AI")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Ask The Brain to write an essay or answer a question..."):
+    if prompt := st.chat_input("Chat with The Brain..."):
         st.session_state.brain_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            response_text = generate_local_response(prompt, st.session_state.brain_messages)
+            response_text = generate_groq_response(prompt, st.session_state.brain_messages)
             st.markdown(response_text)
             st.session_state.brain_messages.append({"role": "assistant", "content": response_text})
 
