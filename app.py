@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import random
 import re
-import wikipediaapi
+import google.generativeai as genai
 
 # --- 1. SYSTEM CONFIGURATION ---
 st.set_page_config(page_title="BDL HUB", layout="wide", page_icon="⚡")
@@ -72,8 +72,6 @@ if "current_mode" not in st.session_state:
     st.session_state.current_mode = "Hub"
 if "brain_messages" not in st.session_state:
     st.session_state.brain_messages = []
-if "last_searched_topic" not in st.session_state:
-    st.session_state.last_searched_topic = None
 
 # --- 4. MIDNIGHT DARK CSS ---
 def apply_styles():
@@ -183,91 +181,32 @@ def apply_styles():
 
 apply_styles()
 
-# --- 5. DIRECT QUESTION & SEARCH RESOLUTION ENGINE ---
+# --- 5. GEMINI API GENERATIVE TEXT ENGINE ---
 def generate_local_response(prompt, history):
     try:
-        p = prompt.lower().strip()
-        wiki_api = wikipediaapi.Wikipedia(user_agent='BDLHub/1.0', language='en')
-
-        openers = [
-            "Here's my breakdown: ",
-            "To put it simply, ",
-            "Here is what you need to know: ",
-            "Looking into that, ",
-            "Here's the direct answer: "
-        ]
-        
-        greetings = [
-            "Hey! Ready whenever you are. What's on your mind?",
-            "Hello! I'm online and tracking our session. What are we diving into?",
-            "Hey there! What can I help you work through or explain next?",
-            "I'm here. What topic or project are we tackling?"
-        ]
-
-        # 1. Greetings & Identity
-        if any(w in p for w in ["hello", "hi", "hey"]):
-            return random.choice(greetings)
-        if "who are you" in p or "what are you" in p:
-            return "I'm **The Brain**—your interactive local assistant built into BDL Hub."
-
-        # 2. Direct Intercept for Trump
-        if "trump" in p and ("how many times" in p or "presdint" in p or "president" in p or "elected" in p):
-            st.session_state.last_searched_topic = "Donald Trump"
-            return "Donald Trump has been elected President of the United States **two times**. He served as the 45th president from 2017 to 2021, and as the 47th president following his second inauguration on January 20, 2025."
-
-        # 3. Direct Intercept for Messi
-        if ("messi" in p or "messy" in p) and ("balan" in p or "ballon" in p or "dor" in p or "award" in p or "troph" in p or "how many" in p):
-            st.session_state.last_searched_topic = "Lionel Messi"
-            return "Lionel Messi has won the Ballon d'Or **8 times** (2009, 2010, 2011, 2012, 2015, 2019, 2021, and 2023). This is the record for the most Ballon d'Or awards won by any player in football history."
-
-        # 4. Direct Intercept for Ronaldo / Renaldo
-        if ("ronaldo" in p or "renaldo" in p or "cristiano" in p) and ("balan" in p or "ballon" in p or "dor" in p or "award" in p or "troph" in p or "how many" in p):
-            st.session_state.last_searched_topic = "Cristiano Ronaldo"
-            return "Cristiano Ronaldo has won the Ballon d'Or **5 times** (2008, 2013, 2014, 2016, and 2017)."
-
-        # 5. General Subject Extraction & Topic Mapping (Alias Fixes)
-        topic_target = None
-        if "ronaldo" in p or "renaldo" in p or "cristiano" in p:
-            topic_target = "Cristiano Ronaldo"
-        elif "messi" in p or "messy" in p:
-            topic_target = "Lionel Messi"
-        elif "trump" in p:
-            topic_target = "Donald Trump"
-        elif "biden" in p:
-            topic_target = "Joe Biden"
-        elif "obama" in p:
-            topic_target = "Barack Obama"
+        # PULL KEY FROM STREAMLIT SECRETS
+        if "GEMINI_API_KEY" in st.secrets:
+            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         else:
-            clean_words = re.sub(r'^(how many|how many times|who is|what is|tell me about|has|have|been a|presdint|president|explain|how does|why is|a)\s+', '', p, flags=re.IGNORECASE).strip()
-            if clean_words:
-                topic_target = clean_words.title()
+            return "🚨 **API KEY MISSING**: Please add `GEMINI_API_KEY` to your Streamlit Secrets."
 
-        # 6. Fetch Page directly using target with Disambiguation Guard
-        if topic_target:
-            page = wiki_api.page(topic_target)
-            if page.exists():
-                st.session_state.last_searched_topic = topic_target
-                summary_sentences = [s.strip() for s in page.summary.split('. ') if s.strip()]
-                
-                # Filter out sentences that end with disambiguation list teasers
-                valid_sentences = [s for s in summary_sentences if not s.lower().startswith("notable people with the name include")]
-                
-                short_paragraph = ". ".join(valid_sentences[:3])
-                if short_paragraph and not short_paragraph.endswith('.'):
-                    short_paragraph += '.'
-                
-                if short_paragraph:
-                    return f"{random.choice(openers)}{short_paragraph}"
-
-        # 7. Fallback Prompting
-        if st.session_state.last_searched_topic:
-            parent_topic = st.session_state.last_searched_topic.title()
-            return f"Regarding **{parent_topic}**: What specific detail or question would you like to explore next?"
+        # Model configuration
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        return "I couldn't find a direct record for that. Try giving me a specific topic keyword or rephrasing your prompt!"
+        # Format chat history for context
+        formatted_history = []
+        for msg in history[:-1]:
+            formatted_history.append(f"{msg['role'].capitalize()}: {msg['content']}")
+            
+        context_prompt = "\n".join(formatted_history)
+        full_input = f"{context_prompt}\nUser: {prompt}" if context_prompt else prompt
+
+        # Generate response
+        response = model.generate_content(full_input)
+        return response.text
 
     except Exception as e:
-        return "⚡ **Cortex Recovery:** I encountered a temporary processing delay. Please send your query once more."
+        return f"⚡ **Connection Delay:** Unable to reach Gemini core. Error details: {e}"
 
 # --- 6. SIDEBAR AUTH & ADMIN MANAGEMENT ---
 with st.sidebar:
@@ -429,13 +368,13 @@ if st.session_state.current_mode == "Hub":
 # --- PAGE: THE BRAIN ---
 elif st.session_state.current_mode == "The Brain":
     st.title("🧠 The Brain")
-    st.caption("Interactive Assistant with Exact Subject Routing")
+    st.caption("AI Assistant powered by Gemini Engine")
 
     for msg in st.session_state.brain_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Chat with The Brain..."):
+    if prompt := st.chat_input("Ask The Brain to write an essay or answer a question..."):
         st.session_state.brain_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
